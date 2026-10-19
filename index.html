@@ -99,6 +99,25 @@
             stroke-width: 2.5;
             filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.5));
         }
+        /* IMGW-PIB 3-level map color classes */
+        .voivodeship-path.imgw-1 {
+            fill: rgba(250, 204, 21, 0.42);
+            stroke: #facc15;
+            stroke-width: 2.3;
+            filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.45));
+        }
+        .voivodeship-path.imgw-2 {
+            fill: rgba(249, 115, 22, 0.45);
+            stroke: #f97316;
+            stroke-width: 2.4;
+            filter: drop-shadow(0 0 7px rgba(249, 115, 22, 0.5));
+        }
+        .voivodeship-path.imgw-3 {
+            fill: rgba(239, 68, 68, 0.55);
+            stroke: #ef4444;
+            stroke-width: 2.6;
+            filter: drop-shadow(0 0 9px rgba(239, 68, 68, 0.65));
+        }
         .map-label {
             font-family: 'JetBrains Mono', monospace;
             font-size: 8.5px;
@@ -106,6 +125,14 @@
             pointer-events: none;
             font-weight: 600;
             text-anchor: middle;
+        }
+        /* CBRN Plume & Epicenter animations */
+        @keyframes cbrnPulse {
+            0% { r: 3px; opacity: 0.95; }
+            100% { r: 18px; opacity: 0; }
+        }
+        .cbrn-pulse-ring {
+            animation: cbrnPulse 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
         /* Scanline effect for TV preview */
         .tv-scanlines {
@@ -226,13 +253,329 @@
 
                 <div class="p-5 space-y-6">
 
-                    <!-- STEP A: WYBÓR OBSZARU (MAPA SVG + PRESETY GEOGRAFICZNE) -->
+                    <!-- STEP A: WYBÓR OBSZARU (MAPA SVG + MODEL DYSPERSJI CBRN Z WIATREM) -->
                     <div class="space-y-3">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <label class="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
                                 <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[11px]">A</span>
-                                Wybór Obszaru Objętego Komunikatem (16 Województw)
+                                Wybór Obszaru i Model Strefy Skażenia CBRN z Kierunkiem Wiatru
                             </label>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <button type="button" onclick="selectAllVoivodeships()" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-medium transition">
+                                    <i class="fa-solid fa-globe-europe mr-1"></i>Cała Polska (16)
+                                </button>
+                                <button type="button" onclick="selectRegionPreset('coast')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-[11px] font-medium transition">
+                                    Pas Nadmorski (3)
+                                </button>
+                                <button type="button" onclick="selectRegionPreset('south')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-[11px] font-medium transition">
+                                    Południe Polski (4)
+                                </button>
+                                <button type="button" onclick="clearVoivodeships()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-medium transition">
+                                    Reset (1)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Map Interaction Mode Switcher: Regional vs CBRN Plume Point Mode -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950/90 p-1.5 rounded-xl border border-slate-800">
+                            <button type="button" id="map-mode-voivodeship-btn" onclick="setMapInteractionMode('voivodeship')" class="py-2 px-3 rounded-lg text-xs font-mono font-bold bg-amber-500 text-slate-950 flex items-center justify-center gap-2 transition shadow">
+                                <i class="fa-solid fa-map"></i>
+                                <span>Tryb Wojewódzki (Obszarowy)</span>
+                            </button>
+                            <button type="button" id="map-mode-cbrn-btn" onclick="setMapInteractionMode('cbrn')" class="py-2 px-3 rounded-lg text-xs font-mono font-bold bg-slate-900 text-slate-300 hover:text-white flex items-center justify-center gap-2 transition">
+                                <i class="fa-solid fa-radiation text-lime-400"></i>
+                                <span>Tryb Strefy Skażenia CBRN (Kliknij punkt)</span>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+                            <!-- Interactive SVG Map of Poland (16 Voivodeships + CBRN Plume Layer + IMGW Legend) -->
+                            <div class="md:col-span-6 flex flex-col items-center justify-between bg-slate-900/60 rounded-xl p-2.5 border border-slate-800/60 relative">
+                                <div class="text-[10px] font-mono text-slate-400 self-start mb-1 flex items-center justify-between w-full px-1">
+                                    <span id="map-instruction-label">KLIKNIJ WOJEWÓDZTWO NA MAPIE</span>
+                                    <span id="selected-count-badge" class="text-amber-400 font-bold">Wybrano: 1/16</span>
+                                </div>
+
+                                <svg id="poland-svg-map" onclick="handleSvgMapClick(event)" viewBox="0 0 320 300" class="w-full max-w-[285px] h-auto select-none cursor-crosshair" aria-label="Mapa województw Polski">
+                                    <defs>
+                                        <radialGradient id="cbrnHotGrad" cx="50%" cy="50%" r="50%">
+                                            <stop offset="0%" stop-color="#ef4444" stop-opacity="0.75"/>
+                                            <stop offset="100%" stop-color="#f97316" stop-opacity="0.25"/>
+                                        </radialGradient>
+                                        <linearGradient id="cbrnPlumeOuterGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                            <stop offset="0%" stop-color="#eab308" stop-opacity="0.55"/>
+                                            <stop offset="65%" stop-color="#84cc16" stop-opacity="0.30"/>
+                                            <stop offset="100%" stop-color="#22c55e" stop-opacity="0.05"/>
+                                        </linearGradient>
+                                        <linearGradient id="cbrnPlumeCoreGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                            <stop offset="0%" stop-color="#ef4444" stop-opacity="0.70"/>
+                                            <stop offset="70%" stop-color="#f59e0b" stop-opacity="0.40"/>
+                                            <stop offset="100%" stop-color="#eab308" stop-opacity="0.08"/>
+                                        </linearGradient>
+                                    </defs>
+
+                                    <!-- Zachodniopomorskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'zachodniopomorskie')">
+                                        <polygon id="map-zachodniopomorskie" class="voivodeship-path" points="20,45 85,30 95,78 55,95 22,82"/>
+                                        <text x="58" y="65" class="map-label">ZPM</text>
+                                    </g>
+                                    <!-- Pomorskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'pomorskie')">
+                                        <polygon id="map-pomorskie" class="voivodeship-path" points="85,30 148,18 158,68 122,80 95,78"/>
+                                        <text x="125" y="55" class="map-label">POM</text>
+                                    </g>
+                                    <!-- Warmińsko-Mazurskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'warminsko-mazurskie')">
+                                        <polygon id="map-warminsko-mazurskie" class="voivodeship-path" points="148,18 232,25 235,72 180,82 158,68"/>
+                                        <text x="195" y="54" class="map-label">WMA</text>
+                                    </g>
+                                    <!-- Podlaskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'podlaskie')">
+                                        <polygon id="map-podlaskie" class="voivodeship-path" points="232,25 292,38 288,118 242,115 235,72"/>
+                                        <text x="263" y="78" class="map-label">PDL</text>
+                                    </g>
+                                    <!-- Lubuskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'lubuskie')">
+                                        <polygon id="map-lubuskie" class="voivodeship-path" points="22,82 55,95 65,148 28,152"/>
+                                        <text x="44" y="125" class="map-label">LBU</text>
+                                    </g>
+                                    <!-- Wielkopolskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'wielkopolskie')">
+                                        <polygon id="map-wielkopolskie" class="voivodeship-path" points="55,95 95,78 122,80 132,125 118,165 65,148"/>
+                                        <text x="95" y="125" class="map-label">WKP</text>
+                                    </g>
+                                    <!-- Kujawsko-Pomorskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'kujawsko-pomorskie')">
+                                        <polygon id="map-kujawsko-pomorskie" class="voivodeship-path" points="122,80 158,68 180,82 172,122 132,125"/>
+                                        <text x="152" y="102" class="map-label">KPM</text>
+                                    </g>
+                                    <!-- Mazowieckie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'mazowieckie')">
+                                        <polygon id="map-mazowieckie" class="voivodeship-path" points="180,82 235,72 242,115 238,168 192,175 172,122"/>
+                                        <text x="208" y="130" class="map-label">MAZ</text>
+                                    </g>
+                                    <!-- Dolnośląskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'dolnoslaskie')">
+                                        <polygon id="map-dolnoslaskie" class="voivodeship-path" points="28,152 65,148 118,165 105,212 42,205"/>
+                                        <text x="74" y="184" class="map-label">DŚL</text>
+                                    </g>
+                                    <!-- Łódzkie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'lodzkie')">
+                                        <polygon id="map-lodzkie" class="voivodeship-path" points="132,125 172,122 192,175 155,195 118,165"/>
+                                        <text x="155" y="160" class="map-label">ŁÓD</text>
+                                    </g>
+                                    <!-- Lubelskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'lubelskie')">
+                                        <polygon id="map-lubelskie" class="voivodeship-path" points="242,115 288,118 295,198 242,205 238,168"/>
+                                        <text x="266" y="165" class="map-label">LUB</text>
+                                    </g>
+                                    <!-- Opolskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'opolskie')">
+                                        <polygon id="map-opolskie" class="voivodeship-path" points="105,212 118,165 142,192 132,235 102,230"/>
+                                        <text x="120" y="210" class="map-label">OPO</text>
+                                    </g>
+                                    <!-- Śląskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'slaskie')">
+                                        <polygon id="map-slaskie" class="voivodeship-path" points="142,192 155,195 172,215 165,262 132,235"/>
+                                        <text x="153" y="232" class="map-label">ŚLĄ</text>
+                                    </g>
+                                    <!-- Świętokrzyskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'swietokrzyskie')">
+                                        <polygon id="map-swietokrzyskie" class="voivodeship-path" points="192,175 238,168 242,205 198,218 172,215 155,195"/>
+                                        <text x="202" y="198" class="map-label">ŚWK</text>
+                                    </g>
+                                    <!-- Małopolskie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'malopolskie')">
+                                        <polygon id="map-malopolskie" class="voivodeship-path" points="172,215 198,218 228,232 222,278 165,262"/>
+                                        <text x="196" y="252" class="map-label">MŁP</text>
+                                    </g>
+                                    <!-- Podkarpackie -->
+                                    <g onclick="handleVoivodeshipClick(event, 'podkarpackie')">
+                                        <polygon id="map-podkarpackie" class="voivodeship-path" points="242,205 295,198 285,278 222,278 228,232 198,218"/>
+                                        <text x="256" y="248" class="map-label">PKR</text>
+                                    </g>
+
+                                    <!-- DYNAMIC CBRN DISPERSION LAYER (Plume Cone + Hot Zone + Epicenter + Wind Vector) -->
+                                    <g id="cbrn-svg-layer" class="hidden pointer-events-none">
+                                        <!-- Rotated group for wind plume -->
+                                        <g id="cbrn-plume-group" transform="translate(190, 118) rotate(90)">
+                                            <!-- Outer threat zone cone -->
+                                            <path id="cbrn-plume-outer" d="M 0,0 L -24,-95 Q 0,-115 24,-95 Z" fill="url(#cbrnPlumeOuterGrad)" stroke="#84cc16" stroke-width="1" stroke-dasharray="3 2"/>
+                                            <!-- Inner dangerous core cone -->
+                                            <path id="cbrn-plume-core" d="M 0,0 L -12,-65 Q 0,-78 12,-65 Z" fill="url(#cbrnPlumeCoreGrad)" stroke="#f59e0b" stroke-width="1"/>
+                                            <!-- Wind direction centerline arrow -->
+                                            <line id="cbrn-wind-line" x1="0" y1="0" x2="0" y2="-85" stroke="#fef08a" stroke-width="1.2" stroke-dasharray="2 2"/>
+                                        </g>
+                                        <!-- Hot Zone Circle (Immediate Evacuation) -->
+                                        <circle id="cbrn-hotzone-circle" cx="190" cy="118" r="10" fill="url(#cbrnHotGrad)" stroke="#ef4444" stroke-width="1.4"/>
+                                        <!-- Pulsating Epicenter Ring -->
+                                        <circle id="cbrn-epicenter-pulse" cx="190" cy="118" r="6" fill="none" stroke="#ef4444" stroke-width="2" class="cbrn-pulse-ring"/>
+                                        <!-- Epicenter Core Point -->
+                                        <circle id="cbrn-epicenter-dot" cx="190" cy="118" r="3.2" fill="#fef08a" stroke="#dc2626" stroke-width="1.5"/>
+                                        <!-- Epicenter Label -->
+                                        <text id="cbrn-epicenter-label" x="190" y="132" text-anchor="middle" fill="#fef08a" font-family="JetBrains Mono" font-size="7.5" font-weight="bold">PŁOCK</text>
+                                    </g>
+                                </svg>
+
+                                <!-- Map Legend (IMGW-PIB & CBRN Zones) -->
+                                <div class="w-full pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1 text-[9px] font-mono text-slate-400">
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-yellow-400 inline-block"></span>1° IMGW</span>
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-orange-500 inline-block"></span>2° IMGW</span>
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-500 inline-block"></span>3° IMGW</span>
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-lime-400 inline-block"></span>Chmura CBRN</span>
+                                </div>
+                            </div>
+
+                            <!-- Right Column: Switches between Voivodeship List & CBRN Dispersion Simulator -->
+                            <div class="md:col-span-6 flex flex-col justify-between">
+                                <!-- VIEW 1: Voivodeship Quick Grid List -->
+                                <div id="panel-voivodeship-list" class="flex flex-col justify-between h-full">
+                                    <div class="text-[11px] text-slate-400 mb-2 flex items-center justify-between">
+                                        <span>Województwa i szacowana liczba kart SIM:</span>
+                                    </div>
+                                    <div id="voivodeship-buttons-grid" class="grid grid-cols-2 gap-1.5 max-h-[255px] overflow-y-auto pr-1">
+                                        <!-- Populated dynamically by JS -->
+                                    </div>
+                                </div>
+
+                                <!-- VIEW 2: CBRN Point Contamination & Wind Dispersion Controls -->
+                                <div id="panel-cbrn-controls" class="hidden space-y-2.5">
+                                    <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                                        <span class="text-[11px] font-mono font-bold text-lime-400 uppercase flex items-center gap-1.5">
+                                            <i class="fa-solid fa-biohazard"></i> Parametry Dyspersji Skażenia
+                                        </span>
+                                        <span id="cbrn-coords-badge" class="text-[10px] font-mono text-slate-400">Płock (X:190, Y:118)</span>
+                                    </div>
+
+                                    <!-- Critical Infrastructure Presets -->
+                                    <div>
+                                        <div class="text-[10px] font-mono text-slate-400 mb-1">Zakłady krytyczne / Kliknij na mapie:</div>
+                                        <div class="flex flex-wrap gap-1">
+                                            <button type="button" onclick="selectCbrnPreset('plock')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-amber-300 border border-slate-700 transition">Płock (Petrochemia)</button>
+                                            <button type="button" onclick="selectCbrnPreset('pulawy')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-amber-300 border border-slate-700 transition">Puławy (Azoty)</button>
+                                            <button type="button" onclick="selectCbrnPreset('police')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-amber-300 border border-slate-700 transition">Police (Chemia)</button>
+                                            <button type="button" onclick="selectCbrnPreset('wloclawek')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-amber-300 border border-slate-700 transition">Włocławek (Anwil)</button>
+                                            <button type="button" onclick="selectCbrnPreset('choczewo')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-lime-300 border border-slate-700 transition">Choczewo (EJ)</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Sliders: Hot Zone Radius, Wind Direction, Wind Speed -->
+                                    <div class="space-y-2 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                                        <div>
+                                            <div class="flex justify-between text-[10px] font-mono mb-0.5">
+                                                <span class="text-slate-300">Strefa gorąca (Ewakuacja):</span>
+                                                <span id="cbrn-radius-label" class="text-red-400 font-bold">15 km</span>
+                                            </div>
+                                            <input id="cbrn-radius-slider" type="range" min="5" max="50" value="15" oninput="updateCbrnPlume()" class="w-full accent-red-500 cursor-pointer h-1.5">
+                                        </div>
+
+                                        <div class="flex items-center gap-2.5">
+                                            <div class="flex-1">
+                                                <div class="flex justify-between text-[10px] font-mono mb-0.5">
+                                                    <span class="text-slate-300">Wektor wiatru (Dokąd wieje):</span>
+                                                    <span id="cbrn-wind-dir-label" class="text-amber-400 font-bold">90° (E - Wschód)</span>
+                                                </div>
+                                                <input id="cbrn-wind-dir-slider" type="range" min="0" max="359" value="90" oninput="updateCbrnPlume()" class="w-full accent-amber-500 cursor-pointer h-1.5">
+                                            </div>
+                                            <!-- Mini Interactive Compass Rose -->
+                                            <div class="w-9 h-9 rounded-full bg-slate-950 border border-slate-700 flex items-center justify-center shrink-0 relative" title="Róża wiatrów - kierunek przemieszczania chmury">
+                                                <span class="absolute top-0.5 text-[7px] font-mono text-slate-500">N</span>
+                                                <i id="cbrn-compass-arrow" class="fa-solid fa-location-arrow text-amber-400 text-xs transition-transform duration-150" style="transform: rotate(45deg);"></i>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div class="flex justify-between text-[10px] font-mono mb-0.5">
+                                                <span class="text-slate-300">Prędkość wiatru:</span>
+                                                <span id="cbrn-wind-speed-label" class="text-cyan-400 font-bold">45 km/h</span>
+                                            </div>
+                                            <input id="cbrn-wind-speed-slider" type="range" min="0" max="120" value="45" oninput="updateCbrnPlume()" class="w-full accent-cyan-500 cursor-pointer h-1.5">
+                                        </div>
+                                    </div>
+
+                                    <!-- Plume Telemetry Readout -->
+                                    <div class="grid grid-cols-3 gap-1.5 text-center font-mono">
+                                        <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-1.5">
+                                            <div class="text-[9px] text-slate-400">Zasięg chmury</div>
+                                            <div id="cbrn-stat-length" class="text-xs font-bold text-lime-400">82 km</div>
+                                        </div>
+                                        <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-1.5">
+                                            <div class="text-[9px] text-slate-400">Czoło chmury</div>
+                                            <div id="cbrn-stat-eta" class="text-xs font-bold text-amber-400">~1h 49m</div>
+                                        </div>
+                                        <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-1.5">
+                                            <div class="text-[9px] text-slate-400">Populacja</div>
+                                            <div id="cbrn-stat-pop" class="text-xs font-bold text-red-400">~310 tys.</div>
+                                        </div>
+                                    </div>
+
+                                    <button type="button" onclick="applyCbrnAffectedVoivodeships()" class="w-full py-2 px-3 rounded-xl bg-lime-500/20 hover:bg-lime-500/30 text-lime-300 border border-lime-500/40 text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition">
+                                        <i class="fa-solid fa-crosshairs"></i>
+                                        <span>Zaznacz województwa w zasięgu chmury i zaktualizuj komunikat</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STEP B: 3-STOPNIOWA SKALA OSTRZEŻEŃ IMGW-PIB + 5 SZABLONÓW ZAGROŻEŃ -->
+                    <div class="space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
+                                <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[11px]">B</span>
+                                Stopień Zagrożenia IMGW-PIB oraz Szablon Zdarzenia
+                            </label>
+                            <span id="imgw-active-pill" class="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-bold">
+                                IMGW-PIB: 3. STOPIEŃ (CZERWONY)
+                            </span>
+                        </div>
+
+                        <!-- 3-Level IMGW-PIB Scale Selector -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/90 p-2.5 rounded-xl border border-slate-800">
+                            <button type="button" id="imgw-btn-0" onclick="setImgwLevel(0)" class="p-2 rounded-lg border text-left transition">
+                                <div class="flex items-center justify-between mb-0.5">
+                                    <span class="text-[11px] font-bold text-slate-200">Brak / Inne</span>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+                                </div>
+                                <div class="text-[9px] font-mono text-slate-400">Standardowy alarm WCZK / RCB</div>
+                            </button>
+
+                            <button type="button" id="imgw-btn-1" onclick="setImgwLevel(1)" class="p-2 rounded-lg border text-left transition">
+                                <div class="flex items-center justify-between mb-0.5">
+                                    <span class="text-[11px] font-bold text-yellow-300">1. Stopień</span>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow"></span>
+                                </div>
+                                <div class="text-[9px] font-mono text-slate-400">Żółty • Prawdop. 70%</div>
+                            </button>
+
+                            <button type="button" id="imgw-btn-2" onclick="setImgwLevel(2)" class="p-2 rounded-lg border text-left transition">
+                                <div class="flex items-center justify-between mb-0.5">
+                                    <span class="text-[11px] font-bold text-orange-300">2. Stopień</span>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-orange-500 shadow"></span>
+                                </div>
+                                <div class="text-[9px] font-mono text-slate-400">Pomarańczowy • Prawd. 85%</div>
+                            </button>
+
+                            <button type="button" id="imgw-btn-3" onclick="setImgwLevel(3)" class="p-2 rounded-lg border text-left transition">
+                                <div class="flex items-center justify-between mb-0.5">
+                                    <span class="text-[11px] font-bold text-red-300">3. Stopień</span>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-red-500 shadow"></span>
+                                </div>
+                                <div class="text-[9px] font-mono text-slate-400">Czerwony • Katastrofa 95%</div>
+                            </button>
+                        </div>
+
+                        <div id="hazard-types-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- STEP C: TECHNOLOGIA MOBILNA (SMS ALERT RCB vs CELL BROADCAST) + SYMULATOR OBCIĄŻENIA GSM/BTS -->
+                    <div class="space-y-3">
+                        <label class="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
+                            <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[11px]">C</span>
+                            Technologia Mobilna, Kanały i Symulator Obciążenia Sieci GSM (BTS)
+                        </label>
                             <div class="flex flex-wrap items-center gap-1.5">
                                 <button type="button" onclick="selectAllVoivodeships()" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-medium transition">
                                     <i class="fa-solid fa-globe-europe mr-1"></i>Cała Polska (16)
@@ -449,6 +792,79 @@
                                 </div>
                                 <input type="checkbox" id="ch-siren" checked onchange="updateChannelSelection()" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
                             </label>
+                        </div>
+
+                        <!-- NEW: ADVANCED GSM & BTS INFRASTRUCTURE CONGESTION SIMULATOR -->
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                                <div class="text-xs font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-network-wired"></i>
+                                    <span>Symulator Obciążenia Infrastruktury GSM i Stacji Bazowych BTS</span>
+                                </div>
+                                <span id="gsm-health-badge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                                    SIEĆ STABILNA • 3450 BTS AKTYWNYCH
+                                </span>
+                            </div>
+
+                            <!-- Sliders: Citizen Voice Panic & BTS Power/Weather Outage -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+                                    <div class="flex justify-between text-[11px] font-mono mb-1">
+                                        <span class="text-slate-300"><i class="fa-solid fa-phone-volume text-amber-400 mr-1"></i>Panika telefoniczna (Ruch głosowy):</span>
+                                        <span id="gsm-panic-label" class="text-amber-400 font-bold">25%</span>
+                                    </div>
+                                    <input id="gsm-panic-slider" type="range" min="0" max="100" value="25" oninput="updateGsmNetworkTelemetry()" class="w-full accent-amber-500 cursor-pointer h-1.5">
+                                    <div class="text-[9px] text-slate-500 font-mono mt-1">Wzrost połączeń obywateli blokuje kanały sygnalizacyjne SMS</div>
+                                </div>
+
+                                <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+                                    <div class="flex justify-between text-[11px] font-mono mb-1">
+                                        <span class="text-slate-300"><i class="fa-solid fa-bolt-lightning text-red-400 mr-1"></i>Awaria stacji BTS (Brak zasilania):</span>
+                                        <span id="gsm-outage-label" class="text-red-400 font-bold">10%</span>
+                                    </div>
+                                    <input id="gsm-outage-slider" type="range" min="0" max="80" value="10" oninput="updateGsmNetworkTelemetry()" class="w-full accent-red-500 cursor-pointer h-1.5">
+                                    <div class="text-[9px] text-slate-500 font-mono mt-1">Uszkodzenia pogodowe zmniejszają pojemność sieci w regionie</div>
+                                </div>
+                            </div>
+
+                            <!-- 3 Real-Time Channel Layer Load Bars: SDCCH vs TCH/112 vs CBCH -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                <!-- Layer 1: SDCCH (SMS Signaling Bottleneck) -->
+                                <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-2 space-y-1">
+                                    <div class="flex justify-between text-[10px] font-mono">
+                                        <span class="text-slate-300">Kanał SDCCH (SMS RCB):</span>
+                                        <span id="gsm-sdcch-val" class="text-amber-400 font-bold">42%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div id="gsm-sdcch-bar" class="h-full bg-amber-500 transition-all duration-200" style="width: 42%"></div>
+                                    </div>
+                                    <div id="gsm-sms-rate-readout" class="text-[9px] font-mono text-slate-400">Przepustowość: ~4 800 SMS/s</div>
+                                </div>
+
+                                <!-- Layer 2: TCH Voice / 112 Call Drop Rate -->
+                                <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-2 space-y-1">
+                                    <div class="flex justify-between text-[10px] font-mono">
+                                        <span class="text-slate-300">Kanał TCH (Głos / 112):</span>
+                                        <span id="gsm-tch-val" class="text-cyan-400 font-bold">31%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div id="gsm-tch-bar" class="h-full bg-cyan-500 transition-all duration-200" style="width: 31%"></div>
+                                    </div>
+                                    <div id="gsm-drop-readout" class="text-[9px] font-mono text-slate-400">Odrzucone poł. (Drop): 0.4%</div>
+                                </div>
+
+                                <!-- Layer 3: CBCH (Cell Broadcast Channel 919) -->
+                                <div class="bg-slate-900/70 border border-slate-800 rounded-lg p-2 space-y-1">
+                                    <div class="flex justify-between text-[10px] font-mono">
+                                        <span class="text-slate-300">Kanał CBCH (Cell Broad.):</span>
+                                        <span id="gsm-cbch-val" class="text-emerald-400 font-bold">0.8%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div id="gsm-cbch-bar" class="h-full bg-emerald-500 transition-all duration-200" style="width: 3%"></div>
+                                    </div>
+                                    <div id="gsm-cb-coverage-readout" class="text-[9px] font-mono text-emerald-400">Odporny na zator • Zasięg 90% BTS</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -728,12 +1144,12 @@
                                         <div id="phone-rso-card" class="bg-slate-800/80 backdrop-blur border-l-4 border-cyan-500 rounded-xl p-2.5 shadow transition-all duration-300">
                                             <div class="flex items-center justify-between mb-1">
                                                 <div class="flex items-center gap-1.5">
-                                                    <span class="w-4 h-4 rounded bg-cyan-500 text-slate-950 flex items-center justify-center text-[10px] font-bold">
+                                                    <span id="phone-rso-badge" class="w-4 h-4 rounded bg-cyan-500 text-slate-950 flex items-center justify-center text-[10px] font-bold">
                                                         RSO
                                                     </span>
-                                                    <span class="font-semibold text-[11px] text-cyan-300">Aplikacja RSO</span>
+                                                    <span id="phone-rso-app-label" class="font-semibold text-[11px] text-cyan-300">Aplikacja RSO • IMGW-PIB</span>
                                                 </div>
-                                                <span class="text-[9px] font-mono text-slate-400">Push IP</span>
+                                                <span id="phone-rso-degree-pill" class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-red-500/20 text-red-300 font-bold">3. STOPIEŃ</span>
                                             </div>
                                             <p id="phone-rso-title" class="text-[11px] font-semibold text-white">
                                                 OSTRZEŻENIE METEOROLOGICZNE (STOPIEŃ 3)
@@ -888,9 +1304,9 @@
 
                             <!-- BOTTOM RSO TICKER BAR -->
                             <div id="tv-ticker-bar" class="relative z-10 bg-slate-950/95 border-t-2 border-red-600">
-                                <div class="flex items-center justify-between bg-red-700 px-3 py-1 text-white">
+                                <div id="tv-ticker-top-strip" class="flex items-center justify-between bg-red-700 px-3 py-1 text-white transition-colors duration-300">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <span class="bg-white text-red-800 font-extrabold text-[10px] px-1.5 py-0.2 rounded font-mono shrink-0">RSO</span>
+                                        <span id="tv-ticker-rso-badge" class="bg-white text-red-800 font-extrabold text-[10px] px-1.5 py-0.2 rounded font-mono shrink-0">RSO</span>
                                         <span id="tv-ticker-header" class="text-[11px] font-extrabold uppercase tracking-wider truncate">
                                             KOMUNIKAT OSTRZEGAWCZY • ZJAWISKA ATMOSFERYCZNE
                                         </span>
@@ -1194,25 +1610,86 @@
          JAVASCRIPT LOGIC: WEB AUDIO API + WEB SPEECH API + BTS QUEUE
          ========================================== -->
     <script>
-        // --- 1. DATA: 16 VOIVODESHIPS OF POLAND WITH SIM CARD ESTIMATES (IN MILLIONS) ---
+        // --- 1. DATA: 16 VOIVODESHIPS OF POLAND WITH SIM CARD ESTIMATES & SVG CENTROIDS ---
         const VOIVODESHIPS = [
-            { id: 'dolnoslaskie', name: 'dolnośląskie', short: 'DŚL', sims: 3.2 },
-            { id: 'kujawsko-pomorskie', name: 'kujawsko-pomorskie', short: 'KPM', sims: 2.2 },
-            { id: 'lubelskie', name: 'lubelskie', short: 'LUB', sims: 2.1 },
-            { id: 'lubuskie', name: 'lubuskie', short: 'LBU', sims: 1.1 },
-            { id: 'lodzkie', name: 'łódzkie', short: 'ŁÓD', sims: 2.6 },
-            { id: 'malopolskie', name: 'małopolskie', short: 'MŁP', sims: 3.8 },
-            { id: 'mazowieckie', name: 'mazowieckie', short: 'MAZ', sims: 6.2 },
-            { id: 'opolskie', name: 'opolskie', short: 'OPO', sims: 1.0 },
-            { id: 'podkarpackie', name: 'podkarpackie', short: 'PKR', sims: 2.2 },
-            { id: 'podlaskie', name: 'podlaskie', short: 'PDL', sims: 1.2 },
-            { id: 'pomorskie', name: 'pomorskie', short: 'POM', sims: 2.6 },
-            { id: 'slaskie', name: 'śląskie', short: 'ŚLĄ', sims: 4.8 },
-            { id: 'swietokrzyskie', name: 'świętokrzyskie', short: 'ŚWK', sims: 1.3 },
-            { id: 'warminsko-mazurskie', name: 'warmińsko-mazurskie', short: 'WMA', sims: 1.5 },
-            { id: 'wielkopolskie', name: 'wielkopolskie', short: 'WKP', sims: 3.9 },
-            { id: 'zachodniopomorskie', name: 'zachodniopomorskie', short: 'ZPM', sims: 1.8 }
+            { id: 'dolnoslaskie', name: 'dolnośląskie', short: 'DŚL', sims: 3.2, cx: 74, cy: 184 },
+            { id: 'kujawsko-pomorskie', name: 'kujawsko-pomorskie', short: 'KPM', sims: 2.2, cx: 152, cy: 102 },
+            { id: 'lubelskie', name: 'lubelskie', short: 'LUB', sims: 2.1, cx: 266, cy: 165 },
+            { id: 'lubuskie', name: 'lubuskie', short: 'LBU', sims: 1.1, cx: 44, cy: 125 },
+            { id: 'lodzkie', name: 'łódzkie', short: 'ŁÓD', sims: 2.6, cx: 155, cy: 160 },
+            { id: 'malopolskie', name: 'małopolskie', short: 'MŁP', sims: 3.8, cx: 196, cy: 252 },
+            { id: 'mazowieckie', name: 'mazowieckie', short: 'MAZ', sims: 6.2, cx: 208, cy: 130 },
+            { id: 'opolskie', name: 'opolskie', short: 'OPO', sims: 1.0, cx: 120, cy: 210 },
+            { id: 'podkarpackie', name: 'podkarpackie', short: 'PKR', sims: 2.2, cx: 256, cy: 248 },
+            { id: 'podlaskie', name: 'podlaskie', short: 'PDL', sims: 1.2, cx: 263, cy: 78 },
+            { id: 'pomorskie', name: 'pomorskie', short: 'POM', sims: 2.6, cx: 125, cy: 55 },
+            { id: 'slaskie', name: 'śląskie', short: 'ŚLĄ', sims: 4.8, cx: 153, cy: 232 },
+            { id: 'swietokrzyskie', name: 'świętokrzyskie', short: 'ŚWK', sims: 1.3, cx: 202, cy: 198 },
+            { id: 'warminsko-mazurskie', name: 'warmińsko-mazurskie', short: 'WMA', sims: 1.5, cx: 195, cy: 54 },
+            { id: 'wielkopolskie', name: 'wielkopolskie', short: 'WKP', sims: 3.9, cx: 95, cy: 125 },
+            { id: 'zachodniopomorskie', name: 'zachodniopomorskie', short: 'ZPM', sims: 1.8, cx: 58, cy: 65 }
         ];
+
+        // --- 1B. CBRN CRITICAL INDUSTRIAL PRESETS ON POLAND SVG MAP ---
+        const CBRN_PRESETS = {
+            plock: { name: 'Płock (Petrochemia)', x: 182, y: 115, defaultVoiv: 'mazowieckie' },
+            pulawy: { name: 'Puławy (Zakłady Azotowe)', x: 244, y: 158, defaultVoiv: 'lubelskie' },
+            police: { name: 'Police (Zakłady Chemiczne)', x: 32, y: 58, defaultVoiv: 'zachodniopomorskie' },
+            wloclawek: { name: 'Włocławek (Anwil S.A.)', x: 162, y: 112, defaultVoiv: 'kujawsko-pomorskie' },
+            choczewo: { name: 'Choczewo (Elektrownia Jądrowa)', x: 118, y: 24, defaultVoiv: 'pomorskie' }
+        };
+
+        // --- 1C. IMGW-PIB 3-STAGE WARNING SCALE DEFINITIONS ---
+        const IMGW_LEVELS = {
+            0: {
+                level: 0,
+                name: 'Standardowy Alarm Kryzysowy',
+                shortBadge: 'ALARM WCZK',
+                prob: null,
+                mapClass: 'selected',
+                tvHeaderBg: 'bg-red-700',
+                tvBorder: 'border-red-600',
+                boardBg: 'bg-red-950/95 border-red-500',
+                pillClass: 'bg-slate-800 text-slate-300 border-slate-700',
+                rsoBorder: 'border-cyan-500'
+            },
+            1: {
+                level: 1,
+                name: '1. Stopień IMGW-PIB (Żółty)',
+                shortBadge: 'IMGW 1° (ŻÓŁTY)',
+                prob: '70%',
+                mapClass: 'imgw-1',
+                tvHeaderBg: 'bg-yellow-500 text-slate-950',
+                tvBorder: 'border-yellow-400',
+                boardBg: 'bg-yellow-950/95 border-yellow-400',
+                pillClass: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+                rsoBorder: 'border-yellow-400'
+            },
+            2: {
+                level: 2,
+                name: '2. Stopień IMGW-PIB (Pomarańczowy)',
+                shortBadge: 'IMGW 2° (POMARAŃCZOWY)',
+                prob: '85%',
+                mapClass: 'imgw-2',
+                tvHeaderBg: 'bg-orange-600 text-white',
+                tvBorder: 'border-orange-500',
+                boardBg: 'bg-orange-950/95 border-orange-500',
+                pillClass: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+                rsoBorder: 'border-orange-500'
+            },
+            3: {
+                level: 3,
+                name: '3. Stopień IMGW-PIB (Czerwony)',
+                shortBadge: 'IMGW 3° (CZERWONY)',
+                prob: '95%',
+                mapClass: 'imgw-3',
+                tvHeaderBg: 'bg-red-700 text-white',
+                tvBorder: 'border-red-500',
+                boardBg: 'bg-red-950/95 border-red-500',
+                pillClass: 'bg-red-500/20 text-red-300 border-red-500/40',
+                rsoBorder: 'border-red-500'
+            }
+        };
 
         // --- 2. DATA: 5 READY HAZARD TEMPLATES (SMS + RSO + VOICE SCRIPT) ---
         const HAZARDS = [
@@ -1271,6 +1748,26 @@
         // --- 3. APPLICATION STATE ---
         let selectedVoivodeships = new Set(['wielkopolskie']);
         let currentHazardId = 'weather';
+        let currentImgwLevel = 3; // 0 | 1 | 2 | 3
+        let mapInteractionMode = 'voivodeship'; // 'voivodeship' | 'cbrn'
+        let cbrnState = {
+            active: false,
+            name: 'Płock (Petrochemia)',
+            x: 182,
+            y: 115,
+            hotRadiusKm: 15,
+            windDirDeg: 90,
+            windSpeedKmh: 45,
+            plumeLengthKm: 82
+        };
+        let gsmState = {
+            panicPercent: 25,
+            outagePercent: 10,
+            sdcchLoad: 42,
+            tchLoad: 31,
+            dropRate: 0.4,
+            smsPerSec: 4800
+        };
         let mobileTechMode = 'dual'; // 'sms' | 'cb' | 'dual'
         let phoneScreenView = 'sms'; // 'sms' | 'cb'
         let phoneDndActive = false;
@@ -1306,7 +1803,10 @@
         window.onload = function () {
             renderVoivodeshipControls();
             renderHazardButtons();
+            setImgwLevel(3);
             setMobileTech('dual');
+            updateCbrnPlume();
+            updateGsmNetworkTelemetry();
             syncMapStyles();
             applyHazardTemplate();
             updateClock();
@@ -1315,152 +1815,247 @@
             initCanvasVisualizer();
             animateVisualizerLoop();
         };
+        // --- 6. VOIVODESHIPS, CBRN PLUME & IMGW MAP LOGIC ---
+        function setMapInteractionMode(mode) {
+            mapInteractionMode = mode;
+            const btnVoiv = document.getElementById('map-mode-voivodeship-btn');
+            const btnCbrn = document.getElementById('map-mode-cbrn-btn');
+            const panelVoiv = document.getElementById('panel-voivodeship-list');
+            const panelCbrn = document.getElementById('panel-cbrn-controls');
+            const cbrnLayer = document.getElementById('cbrn-svg-layer');
+            const labelEl = document.getElementById('map-instruction-label');
 
-        function updateClock() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const shortTime = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-            const clockEl = document.getElementById('live-clock');
-            const phoneClockEl = document.getElementById('phone-clock');
-            if (clockEl) clockEl.textContent = timeStr;
-            if (phoneClockEl) phoneClockEl.textContent = shortTime;
+            if (mode === 'cbrn') {
+                cbrnState.active = true;
+                btnCbrn.className = 'py-2 px-3 rounded-lg text-xs font-mono font-bold bg-lime-500 text-slate-950 flex items-center justify-center gap-2 transition shadow';
+                btnVoiv.className = 'py-2 px-3 rounded-lg text-xs font-mono font-bold bg-slate-900 text-slate-300 hover:text-white flex items-center justify-center gap-2 transition';
+                panelVoiv.classList.add('hidden');
+                panelCbrn.classList.remove('hidden');
+                cbrnLayer.classList.remove('hidden');
+                labelEl.textContent = 'KLIKNIJ MAPĘ, ABY USTAWIĆ EPICENTRUM SKAŻENIA';
+                labelEl.className = 'text-lime-400 font-bold';
+                updateCbrnPlume();
+            } else {
+                btnVoiv.className = 'py-2 px-3 rounded-lg text-xs font-mono font-bold bg-amber-500 text-slate-950 flex items-center justify-center gap-2 transition shadow';
+                btnCbrn.className = 'py-2 px-3 rounded-lg text-xs font-mono font-bold bg-slate-900 text-slate-300 hover:text-white flex items-center justify-center gap-2 transition';
+                panelCbrn.classList.add('hidden');
+                panelVoiv.classList.remove('hidden');
+                labelEl.textContent = 'KLIKNIJ WOJEWÓDZTWO NA MAPIE';
+                labelEl.className = 'text-slate-400';
+            }
         }
 
-        function scrollToSection(id) {
-            const el = document.getElementById(id);
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        // --- 5. WEB SPEECH API (POLISH VOICE SYNTHESIZER) ---
-        function initSpeechSynthesis() {
-            if (!('speechSynthesis' in window)) {
-                const pill = document.getElementById('tts-status-pill');
-                if (pill) pill.innerHTML = `<i class="fa-solid fa-microphone-slash"></i> <span>Brak Web Speech API</span>`;
+        function handleVoivodeshipClick(event, id) {
+            if (mapInteractionMode === 'cbrn') {
+                // Allow click to pass through to SVG coordinate handler
                 return;
             }
-
-            function loadVoices() {
-                const voices = window.speechSynthesis.getVoices();
-                availableVoices = voices;
-                const select = document.getElementById('tts-voice-select');
-                if (!select) return;
-
-                const plVoices = voices.filter(v => v.lang && v.lang.toLowerCase().includes('pl'));
-                select.innerHTML = '';
-
-                if (plVoices.length > 0) {
-                    plVoices.forEach((v, idx) => {
-                        const opt = document.createElement('option');
-                        opt.value = v.name;
-                        opt.textContent = `${v.name} (${v.lang})`;
-                        if (idx === 0) opt.selected = true;
-                        select.appendChild(opt);
-                    });
-                } else {
-                    const opt = document.createElement('option');
-                    opt.value = '';
-                    opt.textContent = 'Domyślny syntezator systemowy (pl-PL)';
-                    select.appendChild(opt);
-                }
-            }
-
-            loadVoices();
-            if (window.speechSynthesis.onvoiceschanged !== undefined) {
-                window.speechSynthesis.onvoiceschanged = loadVoices;
-            }
+            event.stopPropagation();
+            toggleVoivodeship(id);
         }
 
-        function speakAnnouncement(sourceType = 'tv') {
-            if (!('speechSynthesis' in window)) return;
+        function handleSvgMapClick(event) {
+            if (mapInteractionMode !== 'cbrn') return;
+            const svg = document.getElementById('poland-svg-map');
+            const pt = svg.createSVGPoint();
+            pt.x = event.clientX;
+            pt.y = event.clientY;
+            const cursorPt = pt.matrixTransform(svg.getScreenCTM().inverse());
 
-            stopSpeech();
+            cbrnState.x = Math.max(15, Math.min(305, Math.round(cursorPt.x)));
+            cbrnState.y = Math.max(15, Math.min(285, Math.round(cursorPt.y)));
+            cbrnState.name = `Punkt (${cbrnState.x}, ${cbrnState.y})`;
+            updateCbrnPlume();
+        }
 
-            const scriptText = document.getElementById('voice-script-input').value.trim() ||
-                               document.getElementById('alert-message-input').value.trim();
-            if (!scriptText) return;
+        function selectCbrnPreset(key) {
+            const p = CBRN_PRESETS[key];
+            if (!p) return;
+            cbrnState.x = p.x;
+            cbrnState.y = p.y;
+            cbrnState.name = p.name;
+            setMapInteractionMode('cbrn');
+            updateCbrnPlume();
+        }
 
-            const utterance = new SpeechSynthesisUtterance(scriptText);
-            utterance.lang = 'pl-PL';
+        function getCompassDirectionName(deg) {
+            const dirs = [
+                'N (Północ)', 'NE (Północny-Wschód)', 'E (Wschód)', 'SE (Południowy-Wschód)',
+                'S (Południe)', 'SW (Południowy-Zachód)', 'W (Zachód)', 'NW (Północny-Zachód)'
+            ];
+            return dirs[Math.round(deg / 45) % 8];
+        }
 
-            const voiceName = document.getElementById('tts-voice-select').value;
-            if (voiceName && availableVoices.length > 0) {
-                const foundVoice = availableVoices.find(v => v.name === voiceName);
-                if (foundVoice) utterance.voice = foundVoice;
+        function updateCbrnPlume() {
+            const radiusKm = parseInt(document.getElementById('cbrn-radius-slider').value, 10) || 15;
+            const windDir = parseInt(document.getElementById('cbrn-wind-dir-slider').value, 10) || 0;
+            const windSpeed = parseInt(document.getElementById('cbrn-wind-speed-slider').value, 10) || 0;
+
+            cbrnState.hotRadiusKm = radiusKm;
+            cbrnState.windDirDeg = windDir;
+            cbrnState.windSpeedKmh = windSpeed;
+
+            // Scale: Poland SVG is ~300 units wide (~650 km) => 1 SVG unit ≈ 2.2 km
+            const hotRadiusSvg = Math.max(4, radiusKm / 2.2);
+            const plumeLengthKm = Math.round(radiusKm * 1.4 + windSpeed * 1.35);
+            cbrnState.plumeLengthKm = plumeLengthKm;
+            const plumeLengthSvg = Math.max(hotRadiusSvg * 1.3, plumeLengthKm / 2.2);
+            // Higher wind speed narrows the cone angle slightly while extending length
+            const spreadSvg = Math.max(10, hotRadiusSvg * 1.45 + (120 - windSpeed) * 0.12);
+            const coreLenSvg = plumeLengthSvg * 0.68;
+            const coreSpreadSvg = spreadSvg * 0.52;
+
+            // Update UI Labels
+            document.getElementById('cbrn-coords-badge').textContent = `${cbrnState.name}`;
+            document.getElementById('cbrn-radius-label').textContent = `${radiusKm} km`;
+            document.getElementById('cbrn-wind-dir-label').textContent = `${windDir}° (${getCompassDirectionName(windDir)})`;
+            document.getElementById('cbrn-wind-speed-label').textContent = `${windSpeed} km/h`;
+
+            // Rotate mini compass icon (fa-location-arrow points 45deg NE by default)
+            const compassArrow = document.getElementById('cbrn-compass-arrow');
+            if (compassArrow) {
+                compassArrow.style.transform = `rotate(${windDir - 45}deg)`;
             }
 
-            const baseRate = parseFloat(document.getElementById('tts-rate').value) || 0.95;
-            const basePitch = parseFloat(document.getElementById('tts-pitch').value) || 0.95;
+            // Update SVG Elements
+            const plumeGroup = document.getElementById('cbrn-plume-group');
+            const outerPath = document.getElementById('cbrn-plume-outer');
+            const corePath = document.getElementById('cbrn-plume-core');
+            const windLine = document.getElementById('cbrn-wind-line');
+            const hotCircle = document.getElementById('cbrn-hotzone-circle');
+            const pulseCircle = document.getElementById('cbrn-epicenter-pulse');
+            const dotCircle = document.getElementById('cbrn-epicenter-dot');
+            const labelText = document.getElementById('cbrn-epicenter-label');
 
-            if (sourceType === 'megaphone') {
-                // Outdoor PA horn megaphone style: slightly slower, authoritative cadence
-                utterance.rate = Math.max(0.75, baseRate - 0.08);
-                utterance.pitch = basePitch;
-                startMegaphoneCarrierNoise();
+            if (plumeGroup) {
+                plumeGroup.setAttribute('transform', `translate(${cbrnState.x}, ${cbrnState.y}) rotate(${windDir})`);
+            }
+            if (outerPath) {
+                outerPath.setAttribute('d', `M 0,0 L ${-spreadSvg},${-plumeLengthSvg} Q 0,${-plumeLengthSvg * 1.18} ${spreadSvg},${-plumeLengthSvg} Z`);
+            }
+            if (corePath) {
+                corePath.setAttribute('d', `M 0,0 L ${-coreSpreadSvg},${-coreLenSvg} Q 0,${-coreLenSvg * 1.15} ${coreSpreadSvg},${-coreLenSvg} Z`);
+            }
+            if (windLine) {
+                windLine.setAttribute('y2', String(-plumeLengthSvg * 1.05));
+            }
+            if (hotCircle) {
+                hotCircle.setAttribute('cx', cbrnState.x);
+                hotCircle.setAttribute('cy', cbrnState.y);
+                hotCircle.setAttribute('r', hotRadiusSvg.toFixed(1));
+            }
+            if (pulseCircle) {
+                pulseCircle.setAttribute('cx', cbrnState.x);
+                pulseCircle.setAttribute('cy', cbrnState.y);
+            }
+            if (dotCircle) {
+                dotCircle.setAttribute('cx', cbrnState.x);
+                dotCircle.setAttribute('cy', cbrnState.y);
+            }
+            if (labelText) {
+                labelText.setAttribute('x', cbrnState.x);
+                labelText.setAttribute('y', cbrnState.y + hotRadiusSvg + 9);
+                labelText.textContent = cbrnState.name.split(' ')[0].toUpperCase();
+            }
+
+            // Telemetry Calculations
+            document.getElementById('cbrn-stat-length').textContent = `${plumeLengthKm} km`;
+            if (windSpeed <= 2) {
+                document.getElementById('cbrn-stat-eta').textContent = 'Stagnacja';
             } else {
-                utterance.rate = baseRate;
-                utterance.pitch = basePitch;
+                const totalMins = Math.round((plumeLengthKm / windSpeed) * 60);
+                const h = Math.floor(totalMins / 60);
+                const m = totalMins % 60;
+                document.getElementById('cbrn-stat-eta').textContent = h > 0 ? `~${h}h ${m}m` : `~${m} min`;
             }
 
-            utterance.volume = Math.min(1, Math.max(0.2, sirenVolume * 1.4));
-
-            utterance.onstart = () => {
-                isSpeakingNow = true;
-                const tvInd = document.getElementById('tv-tts-indicator');
-                const tvLabel = document.getElementById('tv-tts-label');
-                const pill = document.getElementById('tts-status-pill');
-                if (tvInd) {
-                    tvInd.classList.remove('hidden');
-                    tvInd.classList.add('flex');
-                }
-                if (tvLabel) {
-                    tvLabel.textContent = sourceType === 'megaphone' ? 'MEGAFON SYRENY DSP-50' : 'LEKTOR RSO NA ŻYWO';
-                }
-                if (pill) {
-                    pill.innerHTML = `<i class="fa-solid fa-volume-high animate-pulse"></i> <span>Syntezator: MÓWI (${sourceType.toUpperCase()})</span>`;
-                }
-            };
-
-            utterance.onend = () => {
-                isSpeakingNow = false;
-                stopMegaphoneCarrierNoise();
-                if (currentSirenMode === 'megaphone') {
-                    sirenActive = false;
-                    updateSirenStatusUI('megaphone', false);
-                }
-                resetSpeechUI();
-            };
-
-            utterance.onerror = () => {
-                isSpeakingNow = false;
-                stopMegaphoneCarrierNoise();
-                resetSpeechUI();
-            };
-
-            window.speechSynthesis.speak(utterance);
+            const estPopThousands = Math.min(4500, Math.round((Math.PI * radiusKm * radiusKm * 0.14) + (plumeLengthKm * 2.8)));
+            document.getElementById('cbrn-stat-pop').textContent = estPopThousands >= 1000
+                ? `~${(estPopThousands / 1000).toFixed(2)} mln`
+                : `~${estPopThousands} tys.`;
         }
 
-        function stopSpeech() {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
+        function applyCbrnAffectedVoivodeships() {
+            // Sample points along the plume vector from epicenter to plume tip
+            const rad = (cbrnState.windDirDeg - 90) * (Math.PI / 180);
+            const plumeLengthSvg = cbrnState.plumeLengthKm / 2.2;
+            const hotRadiusSvg = cbrnState.hotRadiusKm / 2.2;
+
+            const affected = new Set();
+            VOIVODESHIPS.forEach(v => {
+                // Check distance to epicenter or sample points along plume axis
+                for (let step = 0; step <= 1.0; step += 0.2) {
+                    const px = cbrnState.x + Math.cos(rad) * (plumeLengthSvg * step);
+                    const py = cbrnState.y + Math.sin(rad) * (plumeLengthSvg * step);
+                    const dist = Math.hypot(v.cx - px, v.cy - py);
+                    const threshold = step === 0 ? Math.max(38, hotRadiusSvg + 25) : 42;
+                    if (dist <= threshold) {
+                        affected.add(v.id);
+                    }
+                }
+            });
+
+            if (affected.size === 0) {
+                // Fallback to nearest voivodeship
+                let nearest = VOIVODESHIPS[0];
+                let minD = 9999;
+                VOIVODESHIPS.forEach(v => {
+                    const d = Math.hypot(v.cx - cbrnState.x, v.cy - cbrnState.y);
+                    if (d < minD) {
+                        minD = d;
+                        nearest = v;
+                    }
+                });
+                affected.add(nearest.id);
             }
-            isSpeakingNow = false;
-            stopMegaphoneCarrierNoise();
-            resetSpeechUI();
+
+            selectedVoivodeships = affected;
+            currentHazardId = 'chemical';
+            document.getElementById('siren-mode-select').value = 'megaphone';
+            renderVoivodeshipControls();
+            renderHazardButtons();
+            syncMapStyles();
+
+            // Build specialized CBRN evacuation message with wind vector
+            const regStr = getFormattedRegionString();
+            const windName = getCompassDirectionName(cbrnState.windDirDeg);
+            const smsText = `Uwaga! Skazenie chemiczne w rejonie: ${cbrnState.name} (${regStr}). Chmura przemieszcza sie na ${windName} (${cbrnState.windSpeedKmh} km/h). Ewakuuj sie prostopadle do wiatru lub zamknij okna!`;
+            const voiceText = `Uwaga! Uwaga! Uwaga! Ogłaszam alarm o skażeniu chemicznym w rejonie ${cbrnState.name}, obszar: ${regStr}. Promień strefy gorącej wynosi ${cbrnState.hotRadiusKm} kilometrów. Wiatr wieje w kierunku ${windName} z prędkością ${cbrnState.windSpeedKmh} kilometrów na godzinę. Nakazuje się ewakuację prostopadle do kierunku wiatru lub uszczelnienie budynków.`;
+
+            document.getElementById('alert-message-input').value = smsText;
+            document.getElementById('voice-script-input').value = voiceText;
+            document.getElementById('target-region-summary').textContent = `Obszar CBRN: ${regStr}`;
+            handleMessageEdit();
+            updateGsmNetworkTelemetry();
         }
 
-        function resetSpeechUI() {
-            const tvInd = document.getElementById('tv-tts-indicator');
-            if (tvInd) {
-                tvInd.classList.add('hidden');
-                tvInd.classList.remove('flex');
-            }
-            const pill = document.getElementById('tts-status-pill');
+        function setImgwLevel(level) {
+            currentImgwLevel = level;
+            [0, 1, 2, 3].forEach(lvl => {
+                const btn = document.getElementById(`imgw-btn-${lvl}`);
+                if (!btn) return;
+                if (lvl === level) {
+                    const activeBorder = lvl === 1 ? 'border-yellow-400 bg-yellow-500/15'
+                        : lvl === 2 ? 'border-orange-500 bg-orange-500/15'
+                        : lvl === 3 ? 'border-red-500 bg-red-500/15'
+                        : 'border-slate-500 bg-slate-800/90';
+                    btn.className = `p-2 rounded-lg border-2 ${activeBorder} text-left transition shadow-md`;
+                } else {
+                    btn.className = 'p-2 rounded-lg border border-slate-800 bg-slate-900/60 text-left opacity-70 hover:opacity-100 transition';
+                }
+            });
+
+            const cfg = IMGW_LEVELS[level] || IMGW_LEVELS[0];
+            const pill = document.getElementById('imgw-active-pill');
             if (pill) {
-                pill.innerHTML = `<i class="fa-solid fa-microphone-lines"></i> <span>Syntezator: Gotowy (pl-PL)</span>`;
+                pill.textContent = level === 0 ? 'TRYB: STANDARDOWY ALARM WCZK' : `IMGW-PIB: ${cfg.name.toUpperCase()}`;
+                pill.className = `text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${cfg.pillClass}`;
             }
+
+            syncMapStyles();
+            applyHazardTemplate();
         }
 
-        // --- 6. VOIVODESHIPS & SIM POPULATION LOGIC ---
         function getTotalSelectedSims() {
             let sum = 0;
             selectedVoivodeships.forEach(id => {
@@ -1508,6 +2103,7 @@
             renderVoivodeshipControls();
             syncMapStyles();
             applyHazardTemplate();
+            updateGsmNetworkTelemetry();
         }
 
         function selectAllVoivodeships() {
@@ -1515,6 +2111,7 @@
             renderVoivodeshipControls();
             syncMapStyles();
             applyHazardTemplate();
+            updateGsmNetworkTelemetry();
         }
 
         function selectRegionPreset(preset) {
@@ -1527,6 +2124,7 @@
             renderVoivodeshipControls();
             syncMapStyles();
             applyHazardTemplate();
+            updateGsmNetworkTelemetry();
         }
 
         function clearVoivodeships() {
@@ -1535,15 +2133,21 @@
             renderVoivodeshipControls();
             syncMapStyles();
             applyHazardTemplate();
+            updateGsmNetworkTelemetry();
         }
 
         function syncMapStyles() {
+            const cfg = IMGW_LEVELS[currentImgwLevel] || IMGW_LEVELS[0];
             VOIVODESHIPS.forEach(v => {
                 const poly = document.getElementById(`map-${v.id}`);
                 if (!poly) return;
-                poly.classList.remove('selected', 'active-alert');
+                poly.classList.remove('selected', 'active-alert', 'imgw-1', 'imgw-2', 'imgw-3');
                 if (selectedVoivodeships.has(v.id)) {
-                    poly.classList.add(isAlertActive ? 'active-alert' : 'selected');
+                    if (currentImgwLevel > 0) {
+                        poly.classList.add(cfg.mapClass);
+                    } else {
+                        poly.classList.add(isAlertActive ? 'active-alert' : 'selected');
+                    }
                 }
             });
         }
@@ -1675,46 +2279,28 @@
         function applyHazardTemplate() {
             const hazard = HAZARDS.find(h => h.id === currentHazardId) || HAZARDS[0];
             const regionStr = getFormattedRegionString();
-            document.getElementById('alert-message-input').value = hazard.templateSms(regionStr);
-            document.getElementById('voice-script-input').value = hazard.templateVoice(regionStr);
+            const imgwCfg = IMGW_LEVELS[currentImgwLevel] || IMGW_LEVELS[0];
+
+            let smsText = hazard.templateSms(regionStr);
+            let voiceText = hazard.templateVoice(regionStr);
+
+            if (currentImgwLevel > 0 && (currentHazardId === 'weather' || currentHazardId === 'flood')) {
+                smsText = `[IMGW ${currentImgwLevel} st.] ` + smsText;
+                voiceText = `Komunikat IMGW-PIB: ${imgwCfg.name}, prawdopodobieństwo ${imgwCfg.prob}. ` + voiceText;
+            }
+
+            document.getElementById('alert-message-input').value = smsText;
+            document.getElementById('voice-script-input').value = voiceText;
             document.getElementById('target-region-summary').textContent = `Obszar docelowy: ${regionStr}`;
             handleMessageEdit();
         }
 
-        function resetTemplateText() {
-            applyHazardTemplate();
-        }
-
-        function stripPolishChars() {
-            const input = document.getElementById('alert-message-input');
-            const map = {
-                'ą':'a','ć':'c','ę':'e','ł':'l','ń':'n','ó':'o','ś':'s','ź':'z','ż':'z',
-                'Ą':'A','Ć':'C','Ę':'E','Ł':'L','Ń':'N','Ó':'O','Ś':'S','Ź':'Z','Ż':'Z'
-            };
-            input.value = input.value.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, match => map[match] || match);
-            handleMessageEdit();
-        }
-
-        function handleMessageEdit() {
-            const text = document.getElementById('alert-message-input').value;
-            const len = text.length;
-            const smsParts = Math.max(1, Math.ceil(len / 160));
-            const counterEl = document.getElementById('char-counter');
-            counterEl.textContent = `Znaków: ${len} / 160 (${smsParts} SMS)`;
-            counterEl.className = len > 160 ? 'text-amber-400 font-bold' : 'text-slate-400';
-
-            updateLivePreviews();
-        }
-
-        function updateChannelSelection() {
-            updateLivePreviews();
-        }
-
-        // --- 8. LIVE RECEIVER PREVIEWS (PHONE & TV) ---
+        // --- 8. LIVE RECEIVER PREVIEWS (PHONE & TV WITH IMGW-PIB STYLING) ---
         function updateLivePreviews() {
             const text = document.getElementById('alert-message-input').value.trim() || 'Brak treści komunikatu.';
             const regionStr = getFormattedRegionString();
             const hazard = HAZARDS.find(h => h.id === currentHazardId) || HAZARDS[0];
+            const imgwCfg = IMGW_LEVELS[currentImgwLevel] || IMGW_LEVELS[0];
 
             const rcbEnabled = document.getElementById('ch-rcb').checked;
             const rsoEnabled = document.getElementById('ch-rso').checked;
@@ -1725,51 +2311,125 @@
             document.getElementById('phone-cb-text').textContent = text;
             document.getElementById('phone-rcb-region').textContent = regionStr;
 
-            // Phone RSO Card
-            document.getElementById('phone-rso-card').style.opacity = rsoEnabled ? '1' : '0.35';
-            document.getElementById('phone-rso-title').textContent = hazard.rsoCategory;
+            // Phone RSO Card + IMGW Degree Badge
+            const rsoCard = document.getElementById('phone-rso-card');
+            rsoCard.style.opacity = rsoEnabled ? '1' : '0.35';
+            rsoCard.className = `bg-slate-800/80 backdrop-blur border-l-4 ${imgwCfg.rsoBorder} rounded-xl p-2.5 shadow transition-all duration-300`;
+
+            const rsoDegreePill = document.getElementById('phone-rso-degree-pill');
+            if (rsoDegreePill) {
+                rsoDegreePill.textContent = imgwCfg.shortBadge;
+                rsoDegreePill.className = `text-[9px] font-mono px-1.5 py-0.2 rounded border font-bold ${imgwCfg.pillClass}`;
+            }
+
+            const categoryWithImgw = currentImgwLevel > 0
+                ? `${hazard.rsoCategory.replace(/\s*\(STOPIEŃ \d\)/, '')} • ${imgwCfg.shortBadge}`
+                : hazard.rsoCategory;
+
+            document.getElementById('phone-rso-title').textContent = categoryWithImgw;
 
             // TV RSO Ticker & Fullscreen Board
-            document.getElementById('tv-ticker-header').textContent = `RSO • ${hazard.rsoCategory}`;
+            const tvTopStrip = document.getElementById('tv-ticker-top-strip');
+            const tvTickerBar = document.getElementById('tv-ticker-bar');
+            const tvBoard = document.getElementById('tv-fullscreen-board');
+
+            if (tvTopStrip) {
+                tvTopStrip.className = `flex items-center justify-between px-3 py-1 transition-colors duration-300 ${imgwCfg.tvHeaderBg}`;
+            }
+            if (tvTickerBar) {
+                tvTickerBar.className = `relative z-10 bg-slate-950/95 border-t-2 ${imgwCfg.tvBorder}`;
+            }
+            if (tvBoard) {
+                const hiddenClass = tvDisplayMode === 'fullscreen' ? '' : 'hidden';
+                tvBoard.className = `${hiddenClass} absolute inset-0 z-20 ${imgwCfg.boardBg} backdrop-blur-md p-4 sm:p-6 flex flex-col justify-between border-4 pt-12`;
+            }
+
+            document.getElementById('tv-ticker-header').textContent = `RSO • ${categoryWithImgw}`;
             document.getElementById('tv-ticker-region').textContent = regionStr;
             document.getElementById('tv-ticker-text').textContent = `[SYMULATOR EDUKACYJNY] ${text} • Obszar: ${regionStr} • Zachowaj ostrożność i śledź komunikaty służb.`;
 
-            document.getElementById('tv-board-category').textContent = hazard.rsoCategory;
+            document.getElementById('tv-board-category').textContent = categoryWithImgw;
             document.getElementById('tv-board-message').textContent = text;
             document.getElementById('tv-board-region').textContent = `Obszar obowiązywania: ${regionStr}`;
         }
+        // --- 9. ADVANCED GSM & BTS NETWORK CONGESTION SIMULATION ---
+        function updateGsmNetworkTelemetry() {
+            const panic = parseInt(document.getElementById('gsm-panic-slider').value, 10) || 0;
+            const outage = parseInt(document.getElementById('gsm-outage-slider').value, 10) || 0;
+            const totalSims = getTotalSelectedSims();
 
-        function setTvDisplayMode(mode) {
-            tvDisplayMode = mode;
-            const board = document.getElementById('tv-fullscreen-board');
-            const btnTicker = document.getElementById('tv-mode-ticker-btn');
-            const btnFull = document.getElementById('tv-mode-full-btn');
+            gsmState.panicPercent = panic;
+            gsmState.outagePercent = outage;
 
-            if (mode === 'fullscreen') {
-                board.classList.remove('hidden');
-                btnFull.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500 text-slate-950 font-bold transition';
-                btnTicker.className = 'px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 hover:text-white transition';
+            document.getElementById('gsm-panic-label').textContent = `${panic}%`;
+            document.getElementById('gsm-outage-label').textContent = `${outage}%`;
+
+            // Active BTS stations (~850 per million SIMs)
+            const baseBts = Math.round(totalSims * 880);
+            const activeBts = Math.max(50, Math.round(baseBts * (1 - outage / 100)));
+            const coveragePct = Math.round(100 - outage * 0.85);
+
+            // Calculate SDCCH (Signaling) and TCH (Voice/112) Load
+            const capacityFactor = 1 / Math.max(0.2, 1 - outage / 100);
+            const sdcchLoad = Math.min(100, Math.round((18 + panic * 0.65) * capacityFactor));
+            const tchLoad = Math.min(100, Math.round((12 + panic * 0.78) * capacityFactor));
+            const dropRate = tchLoad > 75 ? ((tchLoad - 75) * 1.45).toFixed(1) : (tchLoad * 0.015).toFixed(1);
+
+            // Effective SMS/s throughput drops sharply when SDCCH is saturated
+            const nominalSmsPerSec = Math.round(activeBts * 2.1);
+            const congestionPenalty = Math.max(0.08, 1 - (sdcchLoad / 112));
+            const effectiveSmsPerSec = Math.max(120, Math.round(nominalSmsPerSec * congestionPenalty));
+
+            gsmState.sdcchLoad = sdcchLoad;
+            gsmState.tchLoad = tchLoad;
+            gsmState.dropRate = dropRate;
+            gsmState.smsPerSec = effectiveSmsPerSec;
+
+            // Update UI Bars & Badges
+            const healthBadge = document.getElementById('gsm-health-badge');
+            if (sdcchLoad >= 85 || outage >= 45) {
+                healthBadge.textContent = `PRZECIĄŻENIE KRYTYCZNE • ${activeBts} BTS AKTYWNYCH`;
+                healthBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-bold animate-pulse';
+            } else if (sdcchLoad >= 60 || outage >= 20) {
+                healthBadge.textContent = `WYSOKIE OBCIĄŻENIE • ${activeBts} BTS AKTYWNYCH`;
+                healthBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold';
             } else {
-                board.classList.add('hidden');
-                btnTicker.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500 text-slate-950 font-bold transition';
-                btnFull.className = 'px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 hover:text-white transition';
+                healthBadge.textContent = `SIEĆ STABILNA • ${activeBts} BTS AKTYWNYCH`;
+                healthBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold';
             }
+
+            document.getElementById('gsm-sdcch-val').textContent = `${sdcchLoad}%`;
+            const sdcchBar = document.getElementById('gsm-sdcch-bar');
+            sdcchBar.style.width = `${sdcchLoad}%`;
+            sdcchBar.className = `h-full transition-all duration-200 ${sdcchLoad > 80 ? 'bg-red-500' : sdcchLoad > 55 ? 'bg-amber-500' : 'bg-emerald-500'}`;
+            document.getElementById('gsm-sms-rate-readout').textContent = `Przepustowość: ~${effectiveSmsPerSec.toLocaleString('pl-PL')} SMS/s`;
+
+            document.getElementById('gsm-tch-val').textContent = `${tchLoad}%`;
+            const tchBar = document.getElementById('gsm-tch-bar');
+            tchBar.style.width = `${tchLoad}%`;
+            tchBar.className = `h-full transition-all duration-200 ${tchLoad > 80 ? 'bg-red-500' : 'bg-cyan-500'}`;
+            document.getElementById('gsm-drop-readout').textContent = `Odrzucone poł. (Drop): ${dropRate}%`;
+
+            document.getElementById('gsm-cb-coverage-readout').textContent = `Odporny na zator • Zasięg ${coveragePct}% BTS`;
         }
 
-        // --- 9. BTS QUEUE SIMULATION (SMS vs CELL BROADCAST) ---
         function startBtsSimulation() {
             if (smsQueueInterval) clearInterval(smsQueueInterval);
+            updateGsmNetworkTelemetry();
 
             const totalSims = getTotalSelectedSims();
+            const totalSimsCount = totalSims * 1000000;
             const smsBar = document.getElementById('sms-queue-bar');
             const smsStatus = document.getElementById('sms-queue-status');
             const cbBar = document.getElementById('cb-queue-bar');
             const cbStatus = document.getElementById('cb-queue-status');
 
-            // Cell Broadcast is instantaneous (<1 second)
+            const coveragePct = Math.round(100 - gsmState.outagePercent * 0.85);
+
+            // Cell Broadcast is instantaneous (<1 second) on all operational BTS towers
             if (mobileTechMode === 'cb' || mobileTechMode === 'dual') {
-                cbBar.style.width = '100%';
-                cbStatus.textContent = `Dostarczono 100% (~${totalSims}M SIM w 0.8 s)`;
+                cbBar.style.width = `${coveragePct}%`;
+                cbStatus.textContent = `Rozsiano w 0.8 s (${coveragePct}% pokrycia BTS)`;
                 cbStatus.className = 'text-emerald-400 font-bold';
             } else {
                 cbBar.style.width = '0%';
@@ -1777,24 +2437,29 @@
                 cbStatus.className = 'text-slate-500';
             }
 
-            // SMS Queue depends on population size
+            // SMS Queue depends on population size AND GSM SDCCH congestion / BTS outage
             if (mobileTechMode === 'sms' || mobileTechMode === 'dual') {
-                smsProgress = 4;
-                smsBar.style.width = '4%';
-                // Larger SIM count = slower queue step
-                const step = Math.max(1.2, 18 / Math.max(1.5, totalSims));
-                smsStatus.textContent = `Kolejkowanie BTS... 4% (szac. ~${Math.ceil(totalSims * 8)} min)`;
-                smsStatus.className = 'text-amber-400 font-bold';
+                smsProgress = 2;
+                smsBar.style.width = '2%';
+
+                const realWorldEstMinutes = Math.max(1, Math.round((totalSimsCount / gsmState.smsPerSec) / 60));
+                const step = Math.max(0.4, (gsmState.smsPerSec / totalSimsCount) * 8500);
+
+                smsStatus.textContent = `Kolejka BTS (SDCCH ${gsmState.sdcchLoad}%): 2% (~${realWorldEstMinutes} min)`;
+                smsStatus.className = gsmState.sdcchLoad > 80 ? 'text-red-400 font-bold' : 'text-amber-400 font-bold';
 
                 smsQueueInterval = setInterval(() => {
-                    smsProgress = Math.min(100, smsProgress + step);
+                    smsProgress = Math.min(coveragePct, smsProgress + step);
                     smsBar.style.width = `${smsProgress}%`;
-                    if (smsProgress >= 100) {
-                        smsStatus.textContent = `Wysłano 100% (~${totalSims}M SMS)`;
-                        smsStatus.className = 'text-emerald-400 font-bold';
+                    if (smsProgress >= coveragePct) {
+                        const lostPct = 100 - coveragePct;
+                        smsStatus.textContent = lostPct > 0
+                            ? `Dostarczono ${coveragePct}% (${lostPct}% niedostępne - awaria BTS)`
+                            : `Wysłano 100% (~${totalSims}M SMS w ~${realWorldEstMinutes} min)`;
+                        smsStatus.className = lostPct > 15 ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold';
                         clearInterval(smsQueueInterval);
                     } else {
-                        smsStatus.textContent = `Kolejkowanie BTS: ${Math.round(smsProgress)}% (~${totalSims}M SIM)`;
+                        smsStatus.textContent = `Kolejkowanie BTS: ${Math.round(smsProgress)}% (szac. ~${realWorldEstMinutes} min)`;
                     }
                 }, 250);
             } else {
