@@ -1,0 +1,2281 @@
+```html
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symulator Systemu Ostrzegania i Alarmowania Ludności w Polsce (WCZK / RCB / RSO / DSP-50)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'marquee': 'marquee 22s linear infinite',
+                        'phone-vibrate': 'vibrate 0.3s linear infinite',
+                    },
+                    keyframes: {
+                        marquee: {
+                            '0%': { transform: 'translateX(100%)' },
+                            '100%': { transform: 'translateX(-100%)' }
+                        },
+                        vibrate: {
+                            '0%, 100%': { transform: 'translate(0, 0) rotate(0deg)' },
+                            '25%': { transform: 'translate(-2px, 1px) rotate(-1deg)' },
+                            '50%': { transform: 'translate(2px, -1px) rotate(1deg)' },
+                            '75%': { transform: 'translate(-2px, -1px) rotate(0deg)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #090d16;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        /* Hazard stripes for educational banner */
+        .hazard-stripes {
+            background: repeating-linear-gradient(
+                -45deg,
+                #f59e0b,
+                #f59e0b 14px,
+                #1e293b 14px,
+                #1e293b 28px
+            );
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        /* Voivodeship SVG map styling */
+        .voivodeship-path {
+            fill: #1e293b;
+            stroke: #475569;
+            stroke-width: 1.5;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .voivodeship-path:hover {
+            fill: #334155;
+            stroke: #94a3b8;
+        }
+        .voivodeship-path.selected {
+            fill: rgba(245, 158, 11, 0.35);
+            stroke: #f59e0b;
+            stroke-width: 2.2;
+            filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.35));
+        }
+        .voivodeship-path.active-alert {
+            fill: rgba(239, 68, 68, 0.45);
+            stroke: #ef4444;
+            stroke-width: 2.5;
+            filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.5));
+        }
+        .map-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8.5px;
+            fill: #cbd5e1;
+            pointer-events: none;
+            font-weight: 600;
+            text-anchor: middle;
+        }
+        /* Scanline effect for TV preview */
+        .tv-scanlines {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%
+            ), linear-gradient(
+                90deg,
+                rgba(255, 0, 0, 0.03),
+                rgba(0, 255, 0, 0.01),
+                rgba(0, 0, 255, 0.03)
+            );
+            background-size: 100% 3px, 6px 100%;
+        }
+        /* Equalizer bars for TTS voice indicator */
+        @keyframes eqBar {
+            0%, 100% { height: 4px; }
+            50% { height: 16px; }
+        }
+        .eq-bar-1 { animation: eqBar 0.45s ease-in-out infinite; }
+        .eq-bar-2 { animation: eqBar 0.35s ease-in-out infinite 0.1s; }
+        .eq-bar-3 { animation: eqBar 0.55s ease-in-out infinite 0.2s; }
+        .eq-bar-4 { animation: eqBar 0.40s ease-in-out infinite 0.15s; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-500 selection:text-slate-950">
+
+    <!-- 1. MANDATORY EDUCATIONAL DISCLAIMER BANNER -->
+    <div class="sticky top-0 z-50 shadow-xl">
+        <div class="hazard-stripes h-2 w-full"></div>
+        <div class="bg-amber-500 text-slate-950 px-4 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-amber-600">
+            <div class="flex items-center gap-2.5 mx-auto sm:mx-0">
+                <span class="bg-slate-950 text-amber-400 px-2 py-0.5 rounded text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Tryb Szkoleniowy
+                </span>
+                <p class="font-extrabold text-xs sm:text-sm tracking-tight uppercase text-center sm:text-left">
+                    TRYB SZKOLENIOWY – SYMULATOR EDUKACYJNY SYSTEMU OSTRZEGANIA LUDNOŚCI (BRAK RZECZYWISTEGO ZAGROŻENIA)
+                </p>
+            </div>
+            <div class="flex items-center gap-2.5 text-xs font-mono font-semibold bg-amber-400/60 px-2.5 py-0.5 rounded border border-slate-950/20 mx-auto sm:mx-0">
+                <span id="tts-status-pill" class="flex items-center gap-1">
+                    <i class="fa-solid fa-microphone-lines"></i>
+                    <span>Syntezator: Gotowy (pl-PL)</span>
+                </span>
+                <span>•</span>
+                <span id="live-clock" class="font-bold">12:00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP COMMAND HEADER -->
+    <header class="bg-slate-900/90 border-b border-slate-800 backdrop-blur-md px-4 lg:px-8 py-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-red-600/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-inner shrink-0">
+                    <i class="fa-solid fa-tower-broadcast text-2xl"></i>
+                </div>
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">
+                            Krajowy Symulator Ostrzegania i Alarmowania Ludności
+                        </h1>
+                        <span class="text-[11px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700">
+                            WCZK / RCB / RSO / CELL BROADCAST / DSP-50
+                        </span>
+                    </div>
+                    <p class="text-xs sm:text-sm text-slate-400">
+                        Środowisko demonstracyjne: Porównanie SMS Alert RCB vs Cell Broadcast, Lektor TV RSO oraz Syreny Głosowe DSP-50
+                    </p>
+                </div>
+            </div>
+
+            <!-- Global System Status & Quick Nav -->
+            <div class="flex flex-wrap items-center gap-2.5 self-start md:self-auto">
+                <div id="global-status-box" class="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800">
+                    <span id="global-status-dot" class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <div>
+                        <div class="text-[10px] font-mono uppercase text-slate-400 leading-none">Status Systemu</div>
+                        <div id="global-status-text" class="text-xs font-mono font-bold text-emerald-400 mt-0.5">GOTOWOŚĆ OPERACYJNA</div>
+                    </div>
+                </div>
+                <button onclick="scrollToSection('comparison-section')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-code-compare text-cyan-400"></i>
+                    <span>SMS vs Cell Broadcast</span>
+                </button>
+                <button onclick="scrollToSection('edukacja-section')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-book-open text-amber-400"></i>
+                    <span>Baza Wiedzy</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-8">
+
+        <!-- TOP GRID: DISPATCH PANEL (LEFT 7 COLS) + LIVE RECEIVERS PREVIEW (RIGHT 5 COLS) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- ==========================================
+                 1. PANEL STEROWANIA (DYSPOZYTORNIA WCZK) - 7 COLS
+                 ========================================== -->
+            <section class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                <!-- Panel Header -->
+                <div class="bg-slate-950/70 px-5 py-3.5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
+                    <div class="flex items-center gap-2.5">
+                        <i class="fa-solid fa-sliders text-amber-400"></i>
+                        <h2 class="font-bold text-sm sm:text-base tracking-wide uppercase text-slate-100">
+                            1. Panel Dyspozytora (Centrum Zarządzania Kryzysowego)
+                        </h2>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+                        <span id="sim-cards-counter" class="text-cyan-400 font-bold">Karty SIM: ~3.9 mln</span>
+                        <span>•</span>
+                        <span>TERMINAL #WCZK-01</span>
+                    </div>
+                </div>
+
+                <div class="p-5 space-y-6">
+
+                    <!-- STEP A: WYBÓR OBSZARU (MAPA SVG + PRESETY GEOGRAFICZNE) -->
+                    <div class="space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
+                                <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[11px]">A</span>
+                                Wybór Obszaru Objętego Komunikatem (16 Województw)
+                            </label>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <button type="button" onclick="selectAllVoivodeships()" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-medium transition">
+                                    <i class="fa-solid fa-globe-europe mr-1"></i>Cała Polska (16)
+                                </button>
+                                <button type="button" onclick="selectRegionPreset('coast')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-[11px] font-medium transition">
+                                    Pas Nadmorski (3)
+                                </button>
+                                <button type="button" onclick="selectRegionPreset('south')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-[11px] font-medium transition">
+                                    Południe Polski (4)
+                                </button>
+                                <button type="button" onclick="clearVoivodeships()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-medium transition">
+                                    Reset (1)
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+                            <!-- Interactive SVG Map of Poland (16 Voivodeships) -->
+                            <div class="md:col-span-6 flex flex-col items-center justify-center bg-slate-900/60 rounded-xl p-2 border border-slate-800/60 relative">
+                                <div class="text-[10px] font-mono text-slate-400 self-start mb-1 flex items-center justify-between w-full px-1">
+                                    <span>KLIKNIJ WOJEWÓDZTWO NA MAPIE</span>
+                                    <span id="selected-count-badge" class="text-amber-400 font-bold">Wybrano: 1/16</span>
+                                </div>
+                                <svg id="poland-svg-map" viewBox="0 0 320 300" class="w-full max-w-[270px] h-auto select-none" aria-label="Mapa województw Polski">
+                                    <!-- Zachodniopomorskie -->
+                                    <g onclick="toggleVoivodeship('zachodniopomorskie')">
+                                        <polygon id="map-zachodniopomorskie" class="voivodeship-path" points="20,45 85,30 95,78 55,95 22,82"/>
+                                        <text x="58" y="65" class="map-label">ZPM</text>
+                                    </g>
+                                    <!-- Pomorskie -->
+                                    <g onclick="toggleVoivodeship('pomorskie')">
+                                        <polygon id="map-pomorskie" class="voivodeship-path" points="85,30 148,18 158,68 122,80 95,78"/>
+                                        <text x="125" y="55" class="map-label">POM</text>
+                                    </g>
+                                    <!-- Warmińsko-Mazurskie -->
+                                    <g onclick="toggleVoivodeship('warminsko-mazurskie')">
+                                        <polygon id="map-warminsko-mazurskie" class="voivodeship-path" points="148,18 232,25 235,72 180,82 158,68"/>
+                                        <text x="195" y="54" class="map-label">WMA</text>
+                                    </g>
+                                    <!-- Podlaskie -->
+                                    <g onclick="toggleVoivodeship('podlaskie')">
+                                        <polygon id="map-podlaskie" class="voivodeship-path" points="232,25 292,38 288,118 242,115 235,72"/>
+                                        <text x="263" y="78" class="map-label">PDL</text>
+                                    </g>
+                                    <!-- Lubuskie -->
+                                    <g onclick="toggleVoivodeship('lubuskie')">
+                                        <polygon id="map-lubuskie" class="voivodeship-path" points="22,82 55,95 65,148 28,152"/>
+                                        <text x="44" y="125" class="map-label">LBU</text>
+                                    </g>
+                                    <!-- Wielkopolskie -->
+                                    <g onclick="toggleVoivodeship('wielkopolskie')">
+                                        <polygon id="map-wielkopolskie" class="voivodeship-path" points="55,95 95,78 122,80 132,125 118,165 65,148"/>
+                                        <text x="95" y="125" class="map-label">WKP</text>
+                                    </g>
+                                    <!-- Kujawsko-Pomorskie -->
+                                    <g onclick="toggleVoivodeship('kujawsko-pomorskie')">
+                                        <polygon id="map-kujawsko-pomorskie" class="voivodeship-path" points="122,80 158,68 180,82 172,122 132,125"/>
+                                        <text x="152" y="102" class="map-label">KPM</text>
+                                    </g>
+                                    <!-- Mazowieckie -->
+                                    <g onclick="toggleVoivodeship('mazowieckie')">
+                                        <polygon id="map-mazowieckie" class="voivodeship-path" points="180,82 235,72 242,115 238,168 192,175 172,122"/>
+                                        <text x="208" y="130" class="map-label">MAZ</text>
+                                    </g>
+                                    <!-- Dolnośląskie -->
+                                    <g onclick="toggleVoivodeship('dolnoslaskie')">
+                                        <polygon id="map-dolnoslaskie" class="voivodeship-path" points="28,152 65,148 118,165 105,212 42,205"/>
+                                        <text x="74" y="184" class="map-label">DŚL</text>
+                                    </g>
+                                    <!-- Łódzkie -->
+                                    <g onclick="toggleVoivodeship('lodzkie')">
+                                        <polygon id="map-lodzkie" class="voivodeship-path" points="132,125 172,122 192,175 155,195 118,165"/>
+                                        <text x="155" y="160" class="map-label">ŁÓD</text>
+                                    </g>
+                                    <!-- Lubelskie -->
+                                    <g onclick="toggleVoivodeship('lubelskie')">
+                                        <polygon id="map-lubelskie" class="voivodeship-path" points="242,115 288,118 295,198 242,205 238,168"/>
+                                        <text x="266" y="165" class="map-label">LUB</text>
+                                    </g>
+                                    <!-- Opolskie -->
+                                    <g onclick="toggleVoivodeship('opolskie')">
+                                        <polygon id="map-opolskie" class="voivodeship-path" points="105,212 118,165 142,192 132,235 102,230"/>
+                                        <text x="120" y="210" class="map-label">OPO</text>
+                                    </g>
+                                    <!-- Śląskie -->
+                                    <g onclick="toggleVoivodeship('slaskie')">
+                                        <polygon id="map-slaskie" class="voivodeship-path" points="142,192 155,195 172,215 165,262 132,235"/>
+                                        <text x="153" y="232" class="map-label">ŚLĄ</text>
+                                    </g>
+                                    <!-- Świętokrzyskie -->
+                                    <g onclick="toggleVoivodeship('swietokrzyskie')">
+                                        <polygon id="map-swietokrzyskie" class="voivodeship-path" points="192,175 238,168 242,205 198,218 172,215 155,195"/>
+                                        <text x="202" y="198" class="map-label">ŚWK</text>
+                                    </g>
+                                    <!-- Małopolskie -->
+                                    <g onclick="toggleVoivodeship('malopolskie')">
+                                        <polygon id="map-malopolskie" class="voivodeship-path" points="172,215 198,218 228,232 222,278 165,262"/>
+                                        <text x="196" y="252" class="map-label">MŁP</text>
+                                    </g>
+                                    <!-- Podkarpackie -->
+                                    <g onclick="toggleVoivodeship('podkarpackie')">
+                                        <polygon id="map-podkarpackie" class="voivodeship-path" points="242,205 295,198 285,278 222,278 228,232 198,218"/>
+                                        <text x="256" y="248" class="map-label">PKR</text>
+                                    </g>
+                                </svg>
+                            </div>
+
+                            <!-- Voivodeship Quick Grid List with SIM population -->
+                            <div class="md:col-span-6 flex flex-col justify-between">
+                                <div class="text-[11px] text-slate-400 mb-2 flex items-center justify-between">
+                                    <span>Województwa i szacowana liczba kart SIM:</span>
+                                </div>
+                                <div id="voivodeship-buttons-grid" class="grid grid-cols-2 gap-1.5 max-h-[245px] overflow-y-auto pr-1">
+                                    <!-- Populated dynamically by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STEP B: 5 SZABLONÓW ZAGROŻEŃ -->
+                    <div class="space-y-2.5">
+                        <label class="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
+                            <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[11px]">B</span>
+                            Szablon Zagrożenia (Automatyczna treść SMS, RSO i komunikatu głosowego DSP-50)
+                        </label>
+                        <div id="hazard-types-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- STEP C: TECHNOLOGIA MOBILNA (SMS ALERT RCB vs CELL BROADCAST) + KANAŁY -->
+                    <div class="space-y-3">
+                        <label class="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
+                            <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[11px]">C</span>
+                            Technologia Mobilna (SMS vs Cell Broadcast) i Kanały Alarmowania
+                        </label>
+
+                        <!-- Mobile Technology Selector (3 Modes) -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-950/90 p-3 rounded-xl border border-slate-800">
+                            <button type="button" id="tech-btn-sms" onclick="setMobileTech('sms')" class="p-3 rounded-xl border text-left transition flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-comment-sms"></i> 1. Standard SMS
+                                    </span>
+                                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">Alert RCB</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-snug">
+                                    Kolejkowanie po stacjach BTS (opóźnienia), brak polskich znaków (160 zn.), respektuje wyciszenie telefonu.
+                                </p>
+                            </button>
+
+                            <button type="button" id="tech-btn-cb" onclick="setMobileTech('cb')" class="p-3 rounded-xl border text-left transition flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-xs font-bold text-red-400 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-tower-cell"></i> 2. Cell Broadcast
+                                    </span>
+                                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-700/50">Kanał 919</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-snug">
+                                    Emisja rozsiewcza (&lt;1 s do milionów), pełny ekran, ton 853+960Hz omija wyciszenie (DND), polskie znaki.
+                                </p>
+                            </button>
+
+                            <button type="button" id="tech-btn-dual" onclick="setMobileTech('dual')" class="p-3 rounded-xl border text-left transition flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-code-compare"></i> 3. Dual-Test (Oba)
+                                    </span>
+                                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/50">Porównanie</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-snug">
+                                    Wyślij równolegle SMS oraz Cell Broadcast i porównaj szybkość dotarcia BTS oraz zachowanie w trybie DND.
+                                </p>
+                            </button>
+                        </div>
+
+                        <!-- Distribution Channels Checkboxes -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <label class="cursor-pointer bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 rounded-xl p-3 flex items-center justify-between transition select-none">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-mobile-screen"></i>
+                                    </span>
+                                    <div>
+                                        <div class="font-bold text-xs text-white">Sieć Komórkowa</div>
+                                        <div class="text-[10px] text-slate-400">SMS RCB / Cell Broadcast</div>
+                                    </div>
+                                </div>
+                                <input type="checkbox" id="ch-rcb" checked onchange="updateChannelSelection()" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                            </label>
+
+                            <label class="cursor-pointer bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 rounded-xl p-3 flex items-center justify-between transition select-none">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-tv"></i>
+                                    </span>
+                                    <div>
+                                        <div class="font-bold text-xs text-white">Telewizja RSO / DVB-T2</div>
+                                        <div class="text-[10px] text-slate-400">Pasek TV + Lektor głosowy</div>
+                                    </div>
+                                </div>
+                                <input type="checkbox" id="ch-rso" checked onchange="updateChannelSelection()" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                            </label>
+
+                            <label class="cursor-pointer bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 rounded-xl p-3 flex items-center justify-between transition select-none">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-8 h-8 rounded-lg bg-red-500/15 text-red-400 flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-bullhorn"></i>
+                                    </span>
+                                    <div>
+                                        <div class="font-bold text-xs text-white">Syreny DSP-50</div>
+                                        <div class="text-[10px] text-slate-400">Syrena + Megafon głosowy</div>
+                                    </div>
+                                </div>
+                                <input type="checkbox" id="ch-siren" checked onchange="updateChannelSelection()" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- STEP D: KONFIGURACJA GŁOSU (WEB SPEECH API) I SYRENY DSP-50 -->
+                    <div class="space-y-3 bg-slate-950/90 border border-slate-800 rounded-xl p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                            <label class="text-xs font-mono uppercase tracking-wider text-cyan-400 font-semibold flex items-center gap-2">
+                                <span class="w-5 h-5 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-[11px]">D</span>
+                                Konfiguracja Syntezatora Mowy (Web Speech API) i Syreny DSP-50
+                            </label>
+                            <span class="text-[10px] font-mono text-slate-400">Lektor RSO & Megafon Szczekaczki</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <!-- Siren Acoustic Mode Select -->
+                            <div>
+                                <label class="block text-[11px] font-mono text-slate-400 mb-1">Tryb pracy syreny przy aktywacji:</label>
+                                <select id="siren-mode-select" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-100 rounded-lg px-2.5 py-2 font-mono focus:outline-none focus:border-amber-500">
+                                    <option value="modulated">Ogłoszenie alarmu (Dźwięk modulowany - 3 min)</option>
+                                    <option value="continuous">Odwołanie alarmu (Dźwięk ciągły - 3 min)</option>
+                                    <option value="megaphone">Megafon DSP-50 (3-tonowy Gong + Komunikat Głosowy)</option>
+                                </select>
+                            </div>
+
+                            <!-- Polish TTS Voice Select -->
+                            <div>
+                                <label class="block text-[11px] font-mono text-slate-400 mb-1">Głos syntezatora (Web Speech API):</label>
+                                <select id="tts-voice-select" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-100 rounded-lg px-2.5 py-2 font-mono focus:outline-none focus:border-cyan-500">
+                                    <option value="">Domyślny głos systemowy (pl-PL)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Sliders: Siren Volume, Speech Rate, Speech Pitch + Auto Read Checkbox -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                            <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+                                <div class="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
+                                    <span>Głośność Audio:</span>
+                                    <span id="siren-volume-label" class="text-amber-400 font-bold">40%</span>
+                                </div>
+                                <input id="siren-volume" type="range" min="5" max="100" value="40" oninput="updateSirenVolume(this.value)" class="w-full accent-amber-500 cursor-pointer">
+                            </div>
+
+                            <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+                                <div class="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
+                                    <span>Tempo mowy:</span>
+                                    <span id="tts-rate-label" class="text-cyan-400 font-bold">0.95x</span>
+                                </div>
+                                <input id="tts-rate" type="range" min="0.7" max="1.3" step="0.05" value="0.95" oninput="document.getElementById('tts-rate-label').textContent = this.value + 'x'" class="w-full accent-cyan-500 cursor-pointer">
+                            </div>
+
+                            <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+                                <div class="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
+                                    <span>Ton głosu:</span>
+                                    <span id="tts-pitch-label" class="text-cyan-400 font-bold">0.95</span>
+                                </div>
+                                <input id="tts-pitch" type="range" min="0.6" max="1.3" step="0.05" value="0.95" oninput="document.getElementById('tts-pitch-label').textContent = this.value" class="w-full accent-cyan-500 cursor-pointer">
+                            </div>
+                        </div>
+
+                        <!-- Auto-Speak Checkboxes -->
+                        <div class="flex flex-wrap items-center gap-4 pt-1 text-xs text-slate-300">
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <input type="checkbox" id="auto-tts-tv" checked class="w-4 h-4 accent-cyan-500 rounded">
+                                <span>Automatycznie uruchom <strong>Lektora RSO / Megafon</strong> po nadaniu alarmu</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- STEP E: EDYTORY TREŚCI (TEKST MOBILNY + SKRYPT DLA LEKTORA/MEGAFONU) -->
+                    <div class="space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label for="alert-message-input" class="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
+                                <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[11px]">E</span>
+                                Treść Komunikatu Tekstowego (SMS Alert RCB / Cell Broadcast / Pasek RSO)
+                            </label>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" onclick="stripPolishChars()" class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Standard GSM 7-bit pozwala zmieścić 160 znaków w 1 wiadomości SMS">
+                                    Konwertuj do GSM 7-bit (bez ogonków)
+                                </button>
+                                <button type="button" onclick="resetTemplateText()" class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition">
+                                    Przywróć szablon
+                                </button>
+                            </div>
+                        </div>
+
+                        <textarea
+                            id="alert-message-input"
+                            rows="2"
+                            oninput="handleMessageEdit()"
+                            class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl p-3 text-xs sm:text-sm text-slate-100 font-mono leading-relaxed focus:outline-none transition"
+                            placeholder="Wprowadź treść komunikatu tekstowego..."
+                        ></textarea>
+
+                        <div class="flex flex-wrap items-center justify-between text-xs font-mono text-slate-400 gap-2">
+                            <span id="target-region-summary" class="text-slate-300 truncate max-w-md">
+                                Obszar: woj. wielkopolskie
+                            </span>
+                            <span id="char-counter">Znaków: 0 / 160 (1 SMS)</span>
+                        </div>
+
+                        <!-- Voice Announcement Script Editor -->
+                        <div class="pt-2">
+                            <div class="flex items-center justify-between mb-1">
+                                <label for="voice-script-input" class="text-[11px] font-mono uppercase text-cyan-400 font-semibold flex items-center gap-1.5">
+                                    <i class="fa-solid fa-microphone-lines"></i>
+                                    Skrypt Głosowy (Lektor TV RSO oraz Megafon Syreny DSP-50):
+                                </label>
+                                <button type="button" onclick="speakAnnouncement('tv')" class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition">
+                                    <i class="fa-solid fa-play mr-1"></i>Testuj lektora
+                                </button>
+                            </div>
+                            <textarea
+                                id="voice-script-input"
+                                rows="2"
+                                class="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-xl p-2.5 text-xs text-cyan-100 font-mono leading-relaxed focus:outline-none transition"
+                                placeholder="Tekst do odczytania przez syntezator mowy Web Speech API..."
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- STEP F: GŁÓWNE PRZYCISKI OPERACYJNE -->
+                    <div class="pt-2 border-t border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                        <button
+                            type="button"
+                            onclick="triggerFullAlert()"
+                            class="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-extrabold text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-red-950/50 flex items-center justify-center gap-2 transition transform active:scale-[0.99]"
+                        >
+                            <i class="fa-solid fa-satellite-dish animate-pulse"></i>
+                            <span>Nadaj Komunikat i Ogłoś Alarm</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onclick="triggerAllClear()"
+                            class="py-3.5 px-3.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+                            title="Nadaje dźwięk ciągły syreny (Odwołanie alarmu) oraz komunikat głosowy o odwołaniu zagrożenia"
+                        >
+                            <i class="fa-solid fa-shield-check"></i>
+                            <span>Odwołaj Alarm</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onclick="stopAllSystems()"
+                            class="py-3.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+                        >
+                            <i class="fa-solid fa-volume-xmark text-red-400"></i>
+                            <span>Stop / Reset</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==========================================
+                 2. PANEL PODGLĄDU NA ŻYWO (ODBIORCY) - 5 COLS
+                 ========================================== -->
+            <section class="lg:col-span-5 space-y-6">
+
+                <!-- 2A. WIRTUALNY SMARTFON (PORÓWNANIE SMS ALERT RCB vs CELL BROADCAST + DND) -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                    <div class="bg-slate-950/70 px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-mobile-screen-button text-amber-400"></i>
+                            <h2 class="font-bold text-xs sm:text-sm uppercase tracking-wide text-slate-100">
+                                2A. Smartfon: SMS (RCB) vs Cell Broadcast
+                            </h2>
+                        </div>
+
+                        <!-- DND (Silent Mode) Toggle Button -->
+                        <button
+                            type="button"
+                            id="phone-dnd-btn"
+                            onclick="togglePhoneDnd()"
+                            class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 transition"
+                            title="Przełącz Tryb Cichy / Nie Przeszkadzać (DND) w telefonie. Zwykły SMS nie wyda dźwięku, natomiast Cell Broadcast (Poziom 1) ominie wyciszenie!"
+                        >
+                            <i id="phone-dnd-icon" class="fa-solid fa-bell text-emerald-400"></i>
+                            <span id="phone-dnd-label">Dźwięk WŁ.</span>
+                        </button>
+                    </div>
+
+                    <!-- BTS Queue & Delivery Telemetry Bar -->
+                    <div class="bg-slate-950/90 px-4 py-2.5 border-b border-slate-800/80 space-y-2">
+                        <div class="flex items-center justify-between text-[11px] font-mono">
+                            <span class="text-slate-400">Symulacja stacji bazowych BTS:</span>
+                            <span id="bts-target-sims" class="text-slate-200 font-bold">~3.9 mln kart SIM</span>
+                        </div>
+
+                        <!-- Progress Bar 1: SMS Queue -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-mono">
+                                <span class="text-amber-400">Kolejka SMS (Alert RCB):</span>
+                                <span id="sms-queue-status" class="text-slate-400">Czuwanie (0%)</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="sms-queue-bar" class="h-full bg-amber-500 w-0 transition-all duration-300"></div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar 2: Cell Broadcast -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-mono">
+                                <span class="text-red-400">Cell Broadcast (Kanał 919):</span>
+                                <span id="cb-queue-status" class="text-slate-400">Czuwanie (0%)</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="cb-queue-bar" class="h-full bg-red-500 w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- Phone View Switcher Tabs -->
+                        <div class="grid grid-cols-2 gap-1.5 pt-1">
+                            <button type="button" id="tab-view-sms" onclick="switchPhoneScreenView('sms')" class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold bg-amber-500 text-slate-950 transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-comment-sms"></i> Widok SMS (RCB)
+                            </button>
+                            <button type="button" id="tab-view-cb" onclick="switchPhoneScreenView('cb')" class="py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold bg-slate-800 text-slate-300 hover:text-white transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Widok Cell Broadcast
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-4 flex flex-col items-center">
+                        <!-- Smartphone Frame -->
+                        <div id="virtual-phone" class="w-full max-w-[335px] bg-slate-950 rounded-[36px] p-3 border-[4px] border-slate-700 shadow-2xl relative">
+                            <!-- Speaker Notch -->
+                            <div class="w-24 h-4 bg-slate-900 rounded-full mx-auto mb-2 flex items-center justify-center gap-2 border border-slate-800">
+                                <span class="w-2 h-2 rounded-full bg-slate-700"></span>
+                                <span class="w-8 h-1 rounded-full bg-slate-700"></span>
+                            </div>
+
+                            <!-- Screen Content -->
+                            <div class="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 rounded-[24px] p-3.5 min-h-[385px] flex flex-col justify-between border border-slate-800/80 relative overflow-hidden">
+                                <!-- Status Bar -->
+                                <div>
+                                    <div class="flex items-center justify-between text-[11px] font-mono text-slate-300 px-1 mb-2">
+                                        <span>PL-GSM 5G</span>
+                                        <div class="flex items-center gap-1.5">
+                                            <span id="phone-dnd-status-pill" class="hidden px-1.5 py-0.2 bg-purple-500/30 text-purple-300 rounded text-[9px] font-bold">
+                                                <i class="fa-solid fa-moon"></i> DND
+                                            </span>
+                                            <i class="fa-solid fa-signal text-[10px]"></i>
+                                            <i class="fa-solid fa-wifi text-[10px]"></i>
+                                            <i class="fa-solid fa-battery-three-quarters"></i>
+                                        </div>
+                                    </div>
+
+                                    <!-- Lockscreen Clock -->
+                                    <div class="text-center my-1.5">
+                                        <div id="phone-clock" class="text-3xl font-extrabold tracking-tight text-white font-mono">12:00</div>
+                                        <div id="phone-date" class="text-[11px] text-slate-400">Poniedziałek • Polska</div>
+                                    </div>
+
+                                    <!-- VIEW 1: STANDARD SMS (ALERT RCB) + RSO PUSH -->
+                                    <div id="phone-screen-sms" class="mt-3 space-y-2.5">
+                                        <!-- Alert RCB SMS Card -->
+                                        <div id="phone-rcb-card" class="bg-slate-800/95 backdrop-blur border-l-4 border-amber-500 rounded-xl p-3 shadow-lg transition-all duration-300">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="w-5 h-5 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center text-xs font-extrabold">
+                                                        <i class="fa-solid fa-comment-sms"></i>
+                                                    </span>
+                                                    <span class="font-bold text-xs text-amber-400 tracking-wide">Alert RCB (SMS)</span>
+                                                </div>
+                                                <span id="phone-rcb-time" class="text-[10px] font-mono text-slate-400">Podgląd</span>
+                                            </div>
+                                            <p id="phone-rcb-text" class="text-xs text-slate-100 font-mono leading-snug break-words">
+                                                Uwaga! Dzis i w nocy prognozowane gwaltowne burze z gradem i silny wiatr. Zachowaj ostroznosc.
+                                            </p>
+                                            <div class="mt-2 pt-1.5 border-t border-slate-700/70 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                                <span id="phone-rcb-region" class="truncate max-w-[140px]">woj. wielkopolskie</span>
+                                                <span id="phone-sms-sound-info" class="text-amber-400">Dźwięk SMS</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- RSO Push Notification Card -->
+                                        <div id="phone-rso-card" class="bg-slate-800/80 backdrop-blur border-l-4 border-cyan-500 rounded-xl p-2.5 shadow transition-all duration-300">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="w-4 h-4 rounded bg-cyan-500 text-slate-950 flex items-center justify-center text-[10px] font-bold">
+                                                        RSO
+                                                    </span>
+                                                    <span class="font-semibold text-[11px] text-cyan-300">Aplikacja RSO</span>
+                                                </div>
+                                                <span class="text-[9px] font-mono text-slate-400">Push IP</span>
+                                            </div>
+                                            <p id="phone-rso-title" class="text-[11px] font-semibold text-white">
+                                                OSTRZEŻENIE METEOROLOGICZNE (STOPIEŃ 3)
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- VIEW 2: FULLSCREEN CELL BROADCAST (EU-ALERT / CHANNEL 919) -->
+                                    <div id="phone-screen-cb" class="hidden mt-2 bg-red-950/95 border-2 border-red-500 rounded-2xl p-3 shadow-2xl text-white space-y-2.5 relative overflow-hidden">
+                                        <div class="flex items-center justify-between border-b border-red-500/40 pb-1.5">
+                                            <div class="flex items-center gap-1.5">
+                                                <i class="fa-solid fa-triangle-exclamation text-amber-400 animate-bounce"></i>
+                                                <span class="font-mono font-extrabold text-[11px] uppercase tracking-wider text-amber-300">
+                                                    ALERT KRYZYSOWY • POZIOM 1
+                                                </span>
+                                            </div>
+                                            <span class="text-[9px] font-mono bg-red-800 px-1.5 py-0.5 rounded text-red-100">CH 919</span>
+                                        </div>
+
+                                        <div class="bg-red-900/60 rounded-xl p-2.5 border border-red-500/30">
+                                            <p id="phone-cb-text" class="text-xs font-mono leading-snug text-white font-semibold break-words">
+                                                Uwaga! Dziś i w nocy prognozowane gwałtowne burze z gradem i silny wiatr. Zachowaj ostrożność.
+                                            </p>
+                                        </div>
+
+                                        <div class="space-y-1 text-[10px] font-mono text-red-200">
+                                            <div class="flex justify-between">
+                                                <span>Technologia:</span>
+                                                <span class="font-bold text-white">Cell Broadcast (EU-Alert)</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>Czas emisji BTS:</span>
+                                                <span class="font-bold text-emerald-300">&lt; 1 sekunda (Rozsiewczo)</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>Tryb Cichy (DND):</span>
+                                                <span class="font-bold text-amber-300">OMINIĘTY (Ton 853+960Hz)</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="pt-1 flex gap-1.5">
+                                            <button type="button" onclick="stopCbTone(); speakAnnouncement('phone')" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 text-[10px] font-mono font-bold">
+                                                <i class="fa-solid fa-volume-high mr-1"></i>Czytaj (TTS)
+                                            </button>
+                                            <button type="button" onclick="acknowledgeCellBroadcast()" class="flex-1 py-1.5 px-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[10px] font-mono font-extrabold uppercase">
+                                                OK / Wycisz ton
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bottom Lockscreen Bar -->
+                                <div class="pt-2 flex flex-col items-center gap-1">
+                                    <div id="phone-bottom-caption" class="text-[10px] text-slate-400 font-mono text-center">
+                                        Tryb SMS: zależny od obciążenia BTS
+                                    </div>
+                                    <div class="w-24 h-1 bg-slate-700 rounded-full"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2B. WIRTUALNY EKRAN TELEWIZORA (RSO / DVB-T2 + LEKTOR WEB SPEECH API) -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                    <div class="bg-slate-950/70 px-4 py-3 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-tv text-cyan-400"></i>
+                            <h2 class="font-bold text-xs sm:text-sm uppercase tracking-wide text-slate-100">
+                                2B. Telewizor DVB-T2: RSO + Lektor Głosowy
+                            </h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="speakAnnouncement('tv')" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[11px] font-mono font-bold flex items-center gap-1 transition">
+                                <i class="fa-solid fa-volume-high"></i> Lektor RSO
+                            </button>
+                            <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                                <button type="button" id="tv-mode-ticker-btn" onclick="setTvDisplayMode('ticker')" class="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500 text-slate-950 font-bold transition">
+                                    Pasek
+                                </button>
+                                <button type="button" id="tv-mode-full-btn" onclick="setTvDisplayMode('fullscreen')" class="px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 hover:text-white transition">
+                                    Plansza
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <!-- TV Monitor Bezel -->
+                        <div class="relative rounded-xl overflow-hidden border-[4px] border-slate-800 bg-slate-950 aspect-video shadow-inner flex flex-col justify-between">
+                            <!-- Simulated Live TV Broadcast Background -->
+                            <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-sky-950/60 to-slate-950 flex items-center justify-center">
+                                <div class="text-center opacity-25 select-none pointer-events-none">
+                                    <i class="fa-solid fa-earth-europe text-6xl text-sky-400 mb-2"></i>
+                                    <div class="font-mono text-xs uppercase tracking-widest text-sky-200">PASMO REGIONALNE DVB-T2 • SYGNAŁ TESTOWY</div>
+                                </div>
+                            </div>
+
+                            <!-- Scanline overlay -->
+                            <div class="absolute inset-0 tv-scanlines pointer-events-none"></div>
+
+                            <!-- Top TV Channel Header + Active Voice Indicator -->
+                            <div class="relative z-30 p-3 flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2 bg-slate-950/85 backdrop-blur px-2.5 py-1 rounded border border-slate-700/70">
+                                    <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                                    <span class="text-[11px] font-mono font-bold text-white tracking-wider">TV REGIONALNA • RSO</span>
+                                </div>
+
+                                <!-- Animated TTS Lektor Badge (Shown when Web Speech API is active) -->
+                                <div id="tv-tts-indicator" class="hidden items-center gap-2 bg-cyan-950/90 border border-cyan-400 px-2.5 py-1 rounded-lg text-cyan-200 text-[10px] font-mono font-bold shadow-lg">
+                                    <div class="flex items-end gap-0.5 h-3.5">
+                                        <span class="w-1 bg-cyan-400 rounded-full eq-bar-1"></span>
+                                        <span class="w-1 bg-cyan-400 rounded-full eq-bar-2"></span>
+                                        <span class="w-1 bg-cyan-400 rounded-full eq-bar-3"></span>
+                                        <span class="w-1 bg-cyan-400 rounded-full eq-bar-4"></span>
+                                    </div>
+                                    <span id="tv-tts-label">LEKTOR RSO NA ŻYWO</span>
+                                    <button type="button" onclick="stopSpeech()" class="ml-1 text-red-300 hover:text-white" title="Zatrzymaj lektora">
+                                        <i class="fa-solid fa-circle-stop"></i>
+                                    </button>
+                                </div>
+
+                                <div class="bg-amber-500/90 text-slate-950 font-mono font-extrabold text-[10px] px-2 py-0.5 rounded uppercase">
+                                    SYMULACJA EDUKACYJNA
+                                </div>
+                            </div>
+
+                            <!-- FULLSCREEN RSO BOARD OVERLAY -->
+                            <div id="tv-fullscreen-board" class="hidden absolute inset-0 z-20 bg-red-950/95 backdrop-blur-md p-4 sm:p-6 flex flex-col justify-between border-4 border-red-500 pt-12">
+                                <div class="flex items-center justify-between border-b border-red-500/50 pb-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="bg-white text-red-900 font-extrabold text-xs px-2 py-0.5 rounded font-mono">RSO</span>
+                                        <span class="text-white font-extrabold text-xs uppercase tracking-wider">REGIONALNY SYSTEM OSTRZEGANIA - KOMUNIKAT PILNY</span>
+                                    </div>
+                                </div>
+                                <div class="my-auto py-1 text-center space-y-1.5">
+                                    <div id="tv-board-category" class="inline-block px-3 py-0.5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] uppercase">
+                                        OSTRZEŻENIE METEOROLOGICZNE
+                                    </div>
+                                    <p id="tv-board-message" class="text-white font-bold text-xs sm:text-sm leading-snug max-w-lg mx-auto font-mono">
+                                        Uwaga! Dziś i w nocy prognozowane gwałtowne burze z gradem i silny wiatr. Zachowaj ostrożność.
+                                    </p>
+                                    <div id="tv-board-region" class="text-xs font-mono text-amber-300">
+                                        Obszar: woj. wielkopolskie
+                                    </div>
+                                </div>
+                                <div class="border-t border-red-500/50 pt-1.5 flex items-center justify-between text-[10px] font-mono text-red-200">
+                                    <span>Źródło: Wojewódzkie Centrum Zarządzania Kryzysowego (Symulator)</span>
+                                    <span>Alarmowy: 112</span>
+                                </div>
+                            </div>
+
+                            <!-- BOTTOM RSO TICKER BAR -->
+                            <div id="tv-ticker-bar" class="relative z-10 bg-slate-950/95 border-t-2 border-red-600">
+                                <div class="flex items-center justify-between bg-red-700 px-3 py-1 text-white">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="bg-white text-red-800 font-extrabold text-[10px] px-1.5 py-0.2 rounded font-mono shrink-0">RSO</span>
+                                        <span id="tv-ticker-header" class="text-[11px] font-extrabold uppercase tracking-wider truncate">
+                                            KOMUNIKAT OSTRZEGAWCZY • ZJAWISKA ATMOSFERYCZNE
+                                        </span>
+                                    </div>
+                                    <span id="tv-ticker-region" class="text-[10px] font-mono text-amber-200 hidden sm:inline shrink-0 ml-2">
+                                        woj. wielkopolskie
+                                    </span>
+                                </div>
+                                <div class="overflow-hidden whitespace-nowrap py-1.5 px-3 bg-slate-950 text-amber-300 font-mono text-xs font-semibold">
+                                    <div id="tv-ticker-text" class="inline-block animate-marquee">
+                                        [SYMULATOR EDUKACYJNY] Uwaga! Dziś i w nocy prognozowane gwałtowne burze z gradem i silny wiatr. Zachowaj ostrożność.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2C. KONSOLA SYRENY ALARMOWEJ (SYSTEM DSP-50 / SZCZEKACZKA + OSCYLOSKOP) -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                    <div class="bg-slate-950/70 px-4 py-3 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-bullhorn text-red-400"></i>
+                            <h2 class="font-bold text-xs sm:text-sm uppercase tracking-wide text-slate-100">
+                                2C. Konsola Syreny DSP-50 (Akustyka & Megafon)
+                            </h2>
+                        </div>
+                        <span id="siren-live-badge" class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                            WYŁĄCZONA (0 Hz)
+                        </span>
+                    </div>
+
+                    <div class="p-4 space-y-3">
+                        <!-- Oscilloscope Canvas -->
+                        <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 h-32">
+                            <canvas id="siren-canvas" class="w-full h-full block"></canvas>
+                            <div class="absolute top-2 left-3 flex items-center gap-3 text-[11px] font-mono">
+                                <span id="siren-freq-readout" class="text-amber-400 font-bold">Częstotliwość: 0 Hz</span>
+                                <span id="siren-timer-readout" class="text-slate-400">Czas: 00:00 / 03:00</span>
+                            </div>
+                            <div class="absolute bottom-2 right-3 text-[10px] font-mono text-slate-500">
+                                SYNTEZATOR DSP-50 • WEB AUDIO + SPEECH API
+                            </div>
+                        </div>
+
+                        <!-- Direct Siren & Megaphone Test Buttons -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <button type="button" onclick="startSiren('modulated')" class="py-2 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-[11px] font-bold flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-wave-square"></i>
+                                <span>Alarm (Modul.)</span>
+                            </button>
+                            <button type="button" onclick="startSiren('continuous')" class="py-2 px-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-minus"></i>
+                                <span>Odwołaj (Ciągły)</span>
+                            </button>
+                            <button type="button" onclick="triggerMegaphoneSiren()" class="py-2 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold flex items-center justify-center gap-1.5 transition" title="Odtwarza 3-tonowy gong ostrzegawczy syreny elektronicznej DSP-50 i odczytuje komunikat głosowy z efektem megafonu">
+                                <i class="fa-solid fa-bullhorn"></i>
+                                <span>Szczekaczka DSP</span>
+                            </button>
+                            <button type="button" onclick="stopSiren(); stopSpeech(); stopCbTone();" class="py-2 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-bold flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-stop text-red-400"></i>
+                                <span>Wycisz wszystko</span>
+                            </button>
+                        </div>
+
+                        <!-- Legal Signal Meaning Box -->
+                        <div id="siren-meaning-box" class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1">
+                            <div class="font-bold text-amber-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-scale-balanced"></i>
+                                <span id="siren-meaning-title">Tryb pracy syreny elektronicznej DSP-50 / DSE:</span>
+                            </div>
+                            <p id="siren-meaning-desc" class="text-slate-300 leading-relaxed">
+                                Nowoczesne cyfrowe syreny szczelinowe (np. system DSP-50 wykorzystywany przez PSP i WCZK) oprócz sygnału modulowanego i ciągłego mogą emitować <strong>komunikaty głosowe (tzw. szczekaczki)</strong> poprzedzone gongiem ostrzegawczym.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+
+        <!-- ==========================================
+             3. MODUŁ PORÓWNAWCZY: SMS (ALERT RCB) VS CELL BROADCAST (EU-ALERT)
+             ========================================== -->
+        <section id="comparison-section" class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-slate-950/70 px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-code-compare text-cyan-400 text-lg"></i>
+                    <div>
+                        <h2 class="font-bold text-base sm:text-lg uppercase tracking-wide text-white">
+                            3. Porównanie Technologii: SMS (Alert RCB) vs Cell Broadcast (EU-Alert)
+                        </h2>
+                        <p class="text-xs text-slate-400">
+                            Dlaczego klasyczny SMS ma ograniczenia podczas nagłych zagrożeń i jak działa emisja rozsiewcza Cell Broadcast?
+                        </p>
+                    </div>
+                </div>
+                <button type="button" onclick="setMobileTech('dual'); triggerFullAlert(); scrollToSection('virtual-phone');" class="px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold transition self-start sm:self-auto">
+                    <i class="fa-solid fa-bolt mr-1"></i> Uruchom Dual-Test na Smartfonie
+                </button>
+            </div>
+
+            <div class="p-6 overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 font-mono text-xs uppercase bg-slate-950/60">
+                            <th class="py-3 px-4">Parametr operacyjny</th>
+                            <th class="py-3 px-4 text-amber-400"><i class="fa-solid fa-comment-sms mr-1.5"></i>Standard SMS (Obecny Alert RCB)</th>
+                            <th class="py-3 px-4 text-red-400"><i class="fa-solid fa-tower-cell mr-1.5"></i>Cell Broadcast (EU-Alert / Kanał 919)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/80 text-slate-300">
+                        <tr class="hover:bg-slate-800/30">
+                            <td class="py-3 px-4 font-semibold text-white">Sposób transmisji</td>
+                            <td class="py-3 px-4">Punkt-punkt (kolejkowanie do każdego numeru SIM osobno w bazie BTS)</td>
+                            <td class="py-3 px-4 text-emerald-300 font-medium">Rozsiewczy (Point-to-Multipoint – jedna ramka radiowa do wszystkich telefonów naraz)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/30">
+                            <td class="py-3 px-4 font-semibold text-white">Czas dotarcia do 5 mln osób</td>
+                            <td class="py-3 px-4 text-amber-300">Od kilkunastu minut do nawet kilku godzin (ryzyko zatoru sieci)</td>
+                            <td class="py-3 px-4 text-emerald-300 font-bold">Poniżej 1–3 sekund (niezależnie od liczby odbiorców)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/30">
+                            <td class="py-3 px-4 font-semibold text-white">Zachowanie w Trybie Cichym / Noc (DND)</td>
+                            <td class="py-3 px-4">Respektuje wyciszenie telefonu – w nocy nie obudzi śpiącego obywatela</td>
+                            <td class="py-3 px-4 text-red-300 font-medium">Poziom 1 (Presidential / Extreme) omija wyciszenie i uruchamia głośny sygnał 853+960 Hz</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/30">
+                            <td class="py-3 px-4 font-semibold text-white">Polskie znaki i długość</td>
+                            <td class="py-3 px-4">Brak polskich znaków (standard GSM 7-bit = 160 znaków; z ogonkami tylko 70 znaków)</td>
+                            <td class="py-3 px-4">Pełna obsługa polskich znaków diakrytycznych (do 1395 znaków w 15 stronach CB)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/30">
+                            <td class="py-3 px-4 font-semibold text-white">Prywatność i baza numerów</td>
+                            <td class="py-3 px-4">Operator musi wyszukiwać aktywne numery zalogowane do stacji BTS</td>
+                            <td class="py-3 px-4">Pełna anonimowość – stacja BTS nadaje komunikat w eter bez znajomości numerów SIM</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             4. SEKCJA EDUKACYJNA (ŚCIĄGAWKA I ZASADY ZACHOWANIA)
+             ========================================== -->
+        <section id="edukacja-section" class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-slate-950/70 px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-graduation-cap text-amber-400 text-lg"></i>
+                    <div>
+                        <h2 class="font-bold text-base sm:text-lg uppercase tracking-wide text-white">
+                            4. Sekcja Edukacyjna: Obowiązujące Sygnały Alarmowe i Procedury Zachowania
+                        </h2>
+                        <p class="text-xs text-slate-400">
+                            Opracowano na podstawie przepisów o systemach wykrywania skażeń i powiadamiania o ich wystąpieniu oraz wytycznych Rządowego Centrum Bezpieczeństwa (RCB)
+                        </p>
+                    </div>
+                </div>
+                <span class="text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-lg self-start sm:self-auto">
+                    Kompendium Ochrony Ludności
+                </span>
+            </div>
+
+            <div class="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- Left 6 cols: Siren Signals Cheat Sheet -->
+                <div class="lg:col-span-6 space-y-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                        <i class="fa-solid fa-bullhorn"></i>
+                        Rodzaje Sygnałów Alarmowych w Polsce
+                    </h3>
+
+                    <div class="space-y-3">
+                        <!-- Card 1: Ogłoszenie alarmu -->
+                        <div class="bg-slate-950/80 border-l-4 border-red-500 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-mono text-[11px] font-bold uppercase">Sygnał 1</span>
+                                    <h4 class="font-bold text-white text-sm">OGŁOSZENIE ALARMU</h4>
+                                </div>
+                                <p class="text-xs text-slate-300">
+                                    <strong>Akustyczny:</strong> Ciągły, modulowany dźwięk syreny w okresie <strong>3 minut</strong> (naprzemienne narastanie i opadanie częstotliwości dźwięku).
+                                </p>
+                                <p class="text-xs text-slate-400">
+                                    <strong>Zapowiedź słowna (Syrena DSP-50 / Media):</strong> Powtarzana trzykrotnie zapowiedź: <em>„Uwaga! Uwaga! Uwaga! Ogłaszam alarm (przyczyna, rodzaj alarmu) dla…”</em>
+                                </p>
+                            </div>
+                            <button type="button" onclick="startSiren('modulated')" class="shrink-0 px-3 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 text-xs font-mono font-bold flex items-center gap-1.5 self-start sm:self-center">
+                                <i class="fa-solid fa-volume-high"></i> Odsłuchaj
+                            </button>
+                        </div>
+
+                        <!-- Card 2: Odwołanie alarmu -->
+                        <div class="bg-slate-950/80 border-l-4 border-emerald-500 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono text-[11px] font-bold uppercase">Sygnał 2</span>
+                                    <h4 class="font-bold text-white text-sm">ODWOŁANIE ALARMU</h4>
+                                </div>
+                                <p class="text-xs text-slate-300">
+                                    <strong>Akustyczny:</strong> Ciągły, jednostajny dźwięk syreny w okresie <strong>3 minut</strong> (stała wysokość tonu).
+                                </p>
+                                <p class="text-xs text-slate-400">
+                                    <strong>Zapowiedź słowna:</strong> Powtarzana trzykrotnie zapowiedź: <em>„Uwaga! Uwaga! Uwaga! Odwołuję alarm (przyczyna, rodzaj alarmu) dla…”</em>
+                                </p>
+                            </div>
+                            <button type="button" onclick="startSiren('continuous')" class="shrink-0 px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-mono font-bold flex items-center gap-1.5 self-start sm:self-center">
+                                <i class="fa-solid fa-volume-high"></i> Odsłuchaj
+                            </button>
+                        </div>
+
+                        <!-- Card 3: Megafon Syreny DSP-50 -->
+                        <div class="bg-slate-950/80 border-l-4 border-amber-500 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono text-[11px] font-bold uppercase">DSP-50 / DSE</span>
+                                    <h4 class="font-bold text-white text-sm">KOMUNIKAT GŁOSOWY SYRENY („SZCZEKACZKA”)</h4>
+                                </div>
+                                <p class="text-xs text-slate-300">
+                                    Cyfrowe syreny elektroniczne umożliwiają transmisję komunikatów głosowych bezpośrednio z Centrum Zarządzania Kryzysowego po uprzednim wyemitowaniu gongu ostrzegawczego.
+                                </p>
+                            </div>
+                            <button type="button" onclick="triggerMegaphoneSiren()" class="shrink-0 px-3 py-2 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold flex items-center gap-1.5 self-start sm:self-center">
+                                <i class="fa-solid fa-bullhorn"></i> Testuj DSP
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right 6 cols: Action Checklists -->
+                <div class="lg:col-span-6 space-y-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check"></i>
+                        Zasady Zachowania Po Otrzymaniu Ostrzeżenia lub Usłyszeniu Syreny
+                    </h3>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-1.5">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-sm">1</div>
+                            <h4 class="font-bold text-sm text-white">Włącz lokalne radio lub TV</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Po usłyszeniu dźwięku syreny niezwłocznie włącz regionalną rozgłośnię radiową lub telewizję na pasmo lokalne, aby poznać przyczynę alarmu i dokładne instrukcje służb.
+                            </p>
+                        </div>
+
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-1.5">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-sm">2</div>
+                            <h4 class="font-bold text-sm text-white">Zabezpiecz dom i otoczenie</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                W przypadku burz lub skażeń zamknij okna i drzwi, usuń z balkonów niezakotwiczone przedmioty, naładuj telefon i powerbank oraz przygotuj latarkę.
+                            </p>
+                        </div>
+
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-1.5">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-sm">3</div>
+                            <h4 class="font-bold text-sm text-white">Sprawdź bliskich i sąsiadów</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Upewnij się, że domownicy wiedzą o zagrożeniu. Powiadom osoby starsze lub samotne w sąsiedztwie, które mogły nie odczytać wiadomości SMS lub nie słyszeć syreny.
+                            </p>
+                        </div>
+
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-1.5">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-sm">4</div>
+                            <h4 class="font-bold text-sm text-white">Weryfikuj źródła i nie panikuj</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Korzystaj wyłącznie z oficjalnych komunikatów RCB, IMGW, PSP, Policji i Urzędów Wojewódzkich. Prawdziwy Alert RCB <strong>nigdy nie zawiera linków</strong> do kliknięcia!
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Important Security Warning about Phishing -->
+                    <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3">
+                        <i class="fa-solid fa-shield-halved text-amber-400 text-lg mt-0.5"></i>
+                        <div class="text-xs text-slate-200 space-y-1">
+                            <div class="font-bold text-amber-300 uppercase">Zasada cyberbezpieczeństwa – Jak rozpoznać prawdziwy Alert RCB?</div>
+                            <p class="text-slate-300 leading-relaxed">
+                                Oficjalne wiadomości SMS z systemu <strong>Alert RCB</strong> nigdy nie zawierają odnośników (linków URL), próśb o dopłatę, podanie danych osobowych ani instalację oprogramowania. Każda wiadomość podszywająca się pod RCB z linkiem to próba wyłudzenia danych (smishing).
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-950 border-t border-slate-900 py-5 px-4 lg:px-8 mt-8">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-mono">
+            <div>
+                TRYB SZKOLENIOWY – SYMULATOR EDUKACYJNY SYSTEMU OSTRZEGANIA LUDNOŚCI
+            </div>
+            <div>
+                Zgodność edukacyjna: Ustawa o ochronie ludności i obronie cywilnej • Standardy RCB / RSO / EU-Alert
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==========================================
+         JAVASCRIPT LOGIC: WEB AUDIO API + WEB SPEECH API + BTS QUEUE
+         ========================================== -->
+    <script>
+        // --- 1. DATA: 16 VOIVODESHIPS OF POLAND WITH SIM CARD ESTIMATES (IN MILLIONS) ---
+        const VOIVODESHIPS = [
+            { id: 'dolnoslaskie', name: 'dolnośląskie', short: 'DŚL', sims: 3.2 },
+            { id: 'kujawsko-pomorskie', name: 'kujawsko-pomorskie', short: 'KPM', sims: 2.2 },
+            { id: 'lubelskie', name: 'lubelskie', short: 'LUB', sims: 2.1 },
+            { id: 'lubuskie', name: 'lubuskie', short: 'LBU', sims: 1.1 },
+            { id: 'lodzkie', name: 'łódzkie', short: 'ŁÓD', sims: 2.6 },
+            { id: 'malopolskie', name: 'małopolskie', short: 'MŁP', sims: 3.8 },
+            { id: 'mazowieckie', name: 'mazowieckie', short: 'MAZ', sims: 6.2 },
+            { id: 'opolskie', name: 'opolskie', short: 'OPO', sims: 1.0 },
+            { id: 'podkarpackie', name: 'podkarpackie', short: 'PKR', sims: 2.2 },
+            { id: 'podlaskie', name: 'podlaskie', short: 'PDL', sims: 1.2 },
+            { id: 'pomorskie', name: 'pomorskie', short: 'POM', sims: 2.6 },
+            { id: 'slaskie', name: 'śląskie', short: 'ŚLĄ', sims: 4.8 },
+            { id: 'swietokrzyskie', name: 'świętokrzyskie', short: 'ŚWK', sims: 1.3 },
+            { id: 'warminsko-mazurskie', name: 'warmińsko-mazurskie', short: 'WMA', sims: 1.5 },
+            { id: 'wielkopolskie', name: 'wielkopolskie', short: 'WKP', sims: 3.9 },
+            { id: 'zachodniopomorskie', name: 'zachodniopomorskie', short: 'ZPM', sims: 1.8 }
+        ];
+
+        // --- 2. DATA: 5 READY HAZARD TEMPLATES (SMS + RSO + VOICE SCRIPT) ---
+        const HAZARDS = [
+            {
+                id: 'weather',
+                name: 'Gwałtowne burze i nawałnice',
+                subtitle: 'Burze z gradem, huraganowy wiatr',
+                icon: 'fa-cloud-bolt',
+                rsoCategory: 'OSTRZEŻENIE METEOROLOGICZNE (STOPIEŃ 3)',
+                defaultSiren: 'modulated',
+                templateSms: (reg) => `Uwaga! Dzis i w nocy prognozowane gwaltowne burze z gradem i silny wiatr (${reg}). Zachowaj ostroznosc. Zabezpiecz rzeczy, ktore moze porwac wiatr.`,
+                templateVoice: (reg) => `Uwaga! Uwaga! Uwaga! Komunikat Regionalnego Systemu Ostrzegania dla obszaru: ${reg}. Dziś i w nocy prognozowane są gwałtowne burze z gradem oraz huraganowy wiatr. Prosimy o pozostanie w domach i zabezpieczenie luźnych przedmiotów.`
+            },
+            {
+                id: 'flood',
+                name: 'Wezbranie wód / Powódź',
+                subtitle: 'Przekroczenie stanów alarmowych rzek',
+                icon: 'fa-house-flood-water',
+                rsoCategory: 'KOMUNIKAT HYDROLOGICZNY - ZAGROŻENIE POWODZIOWE',
+                defaultSiren: 'modulated',
+                templateSms: (reg) => `Uwaga! Zagrozenie powodziowe (${reg}). Prognozowane gwaltowne wezbrania rzek. Nie zblizaj sie do walow przeciwpowodziowych. Sluchaj polecen sluzb.`,
+                templateVoice: (reg) => `Uwaga! Uwaga! Uwaga! Ogłaszam alarm przeciwpowodziowy dla obszaru: ${reg}. W związku z gwałtownym wezbraniem wód prosimy nie zbliżać się do rzek i wałów przeciwpowodziowych. Przygotuj się na ewentualną ewakuację.`
+            },
+            {
+                id: 'chemical',
+                name: 'Skażenie chemiczne / Chmura',
+                subtitle: 'Niebezpieczna substancja w powietrzu',
+                icon: 'fa-biohazard',
+                rsoCategory: 'ALARM O SKAŻENIACH - KOMUNIKAT PILNY',
+                defaultSiren: 'megaphone',
+                templateSms: (reg) => `Uwaga! Niebezpieczenstwo skazenia chemicznego powietrza (${reg}). Pozostan w budynkach, zamknij okna i wylacz wentylacje. Sluchaj komunikatow sluzb.`,
+                templateVoice: (reg) => `Uwaga! Uwaga! Uwaga! Ogłaszam alarm o skażeniach chemicznych dla obszaru: ${reg}. Należy niezwłocznie ukryć się w budynkach, szczelnie zamknąć okna i drzwi oraz wyłączyć klimatyzację i wentylację.`
+            },
+            {
+                id: 'air',
+                name: 'Zagrożenie z powietrza / Nalot',
+                subtitle: 'Naruszenie przestrzeni powietrznej',
+                icon: 'fa-plane-up',
+                rsoCategory: 'ALARM POWIETRZNY - BEZPOŚREDNIE ZAGROŻENIE',
+                defaultSiren: 'modulated',
+                templateSms: (reg) => `Uwaga! Zagrozenie z powietrza (${reg}). Niezwlocznie udaj sie do ukrycia lub najnizszej kondygnacji budynku, z dala od okien. Sluchaj polecen sluzb.`,
+                templateVoice: (reg) => `Uwaga! Uwaga! Uwaga! Ogłaszam alarm powietrzny dla obszaru: ${reg}. Prosimy o natychmiastowe udanie się do schronów lub najniższych kondygnacji budynków i zajęcie miejsc z dala od okien.`
+            },
+            {
+                id: 'allclear',
+                name: 'Odwołanie alarmu',
+                subtitle: 'Zakończenie zagrożenia / Ćwiczenia',
+                icon: 'fa-shield-halved',
+                rsoCategory: 'KOMUNIKAT INFORMACYJNY - ODWOŁANIE ALARMU',
+                defaultSiren: 'continuous',
+                templateSms: (reg) => `Uwaga! Odwoluje sie alarm dla obszaru: ${reg}. Bezposrednie zagrozenie minelo. Dziekujemy za zachowanie ostroznosci i stosowanie sie do polecen.`,
+                templateVoice: (reg) => `Uwaga! Uwaga! Uwaga! Odwołuję alarm dla obszaru: ${reg}. Bezpośrednie zagrożenie minęło. Dziękujemy mieszkańcom za zachowanie spokoju i stosowanie się do poleceń służb ratunkowych.`
+            }
+        ];
+
+        // --- 3. APPLICATION STATE ---
+        let selectedVoivodeships = new Set(['wielkopolskie']);
+        let currentHazardId = 'weather';
+        let mobileTechMode = 'dual'; // 'sms' | 'cb' | 'dual'
+        let phoneScreenView = 'sms'; // 'sms' | 'cb'
+        let phoneDndActive = false;
+        let tvDisplayMode = 'ticker';
+        let isAlertActive = false;
+
+        // BTS Queue Simulation Timers
+        let smsQueueInterval = null;
+        let smsProgress = 0;
+
+        // Web Audio API State
+        let audioCtx = null;
+        let oscillator = null;
+        let gainNode = null;
+        let noiseNode = null;
+        let sirenActive = false;
+        let currentSirenMode = 'modulated'; // 'modulated' | 'continuous' | 'megaphone'
+        let sirenStartTime = 0;
+        let sirenVolume = 0.40;
+        let currentFreq = 0;
+
+        // Cell Broadcast Tone State
+        let cbToneOsc1 = null;
+        let cbToneOsc2 = null;
+        let cbToneGain = null;
+        let cbToneInterval = null;
+
+        // Web Speech API State
+        let availableVoices = [];
+        let isSpeakingNow = false;
+
+        // --- 4. INITIALIZATION ---
+        window.onload = function () {
+            renderVoivodeshipControls();
+            renderHazardButtons();
+            setMobileTech('dual');
+            syncMapStyles();
+            applyHazardTemplate();
+            updateClock();
+            setInterval(updateClock, 1000);
+            initSpeechSynthesis();
+            initCanvasVisualizer();
+            animateVisualizerLoop();
+        };
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const shortTime = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+            const clockEl = document.getElementById('live-clock');
+            const phoneClockEl = document.getElementById('phone-clock');
+            if (clockEl) clockEl.textContent = timeStr;
+            if (phoneClockEl) phoneClockEl.textContent = shortTime;
+        }
+
+        function scrollToSection(id) {
+            const el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // --- 5. WEB SPEECH API (POLISH VOICE SYNTHESIZER) ---
+        function initSpeechSynthesis() {
+            if (!('speechSynthesis' in window)) {
+                const pill = document.getElementById('tts-status-pill');
+                if (pill) pill.innerHTML = `<i class="fa-solid fa-microphone-slash"></i> <span>Brak Web Speech API</span>`;
+                return;
+            }
+
+            function loadVoices() {
+                const voices = window.speechSynthesis.getVoices();
+                availableVoices = voices;
+                const select = document.getElementById('tts-voice-select');
+                if (!select) return;
+
+                const plVoices = voices.filter(v => v.lang && v.lang.toLowerCase().includes('pl'));
+                select.innerHTML = '';
+
+                if (plVoices.length > 0) {
+                    plVoices.forEach((v, idx) => {
+                        const opt = document.createElement('option');
+                        opt.value = v.name;
+                        opt.textContent = `${v.name} (${v.lang})`;
+                        if (idx === 0) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+                } else {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = 'Domyślny syntezator systemowy (pl-PL)';
+                    select.appendChild(opt);
+                }
+            }
+
+            loadVoices();
+            if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                window.speechSynthesis.onvoiceschanged = loadVoices;
+            }
+        }
+
+        function speakAnnouncement(sourceType = 'tv') {
+            if (!('speechSynthesis' in window)) return;
+
+            stopSpeech();
+
+            const scriptText = document.getElementById('voice-script-input').value.trim() ||
+                               document.getElementById('alert-message-input').value.trim();
+            if (!scriptText) return;
+
+            const utterance = new SpeechSynthesisUtterance(scriptText);
+            utterance.lang = 'pl-PL';
+
+            const voiceName = document.getElementById('tts-voice-select').value;
+            if (voiceName && availableVoices.length > 0) {
+                const foundVoice = availableVoices.find(v => v.name === voiceName);
+                if (foundVoice) utterance.voice = foundVoice;
+            }
+
+            const baseRate = parseFloat(document.getElementById('tts-rate').value) || 0.95;
+            const basePitch = parseFloat(document.getElementById('tts-pitch').value) || 0.95;
+
+            if (sourceType === 'megaphone') {
+                // Outdoor PA horn megaphone style: slightly slower, authoritative cadence
+                utterance.rate = Math.max(0.75, baseRate - 0.08);
+                utterance.pitch = basePitch;
+                startMegaphoneCarrierNoise();
+            } else {
+                utterance.rate = baseRate;
+                utterance.pitch = basePitch;
+            }
+
+            utterance.volume = Math.min(1, Math.max(0.2, sirenVolume * 1.4));
+
+            utterance.onstart = () => {
+                isSpeakingNow = true;
+                const tvInd = document.getElementById('tv-tts-indicator');
+                const tvLabel = document.getElementById('tv-tts-label');
+                const pill = document.getElementById('tts-status-pill');
+                if (tvInd) {
+                    tvInd.classList.remove('hidden');
+                    tvInd.classList.add('flex');
+                }
+                if (tvLabel) {
+                    tvLabel.textContent = sourceType === 'megaphone' ? 'MEGAFON SYRENY DSP-50' : 'LEKTOR RSO NA ŻYWO';
+                }
+                if (pill) {
+                    pill.innerHTML = `<i class="fa-solid fa-volume-high animate-pulse"></i> <span>Syntezator: MÓWI (${sourceType.toUpperCase()})</span>`;
+                }
+            };
+
+            utterance.onend = () => {
+                isSpeakingNow = false;
+                stopMegaphoneCarrierNoise();
+                if (currentSirenMode === 'megaphone') {
+                    sirenActive = false;
+                    updateSirenStatusUI('megaphone', false);
+                }
+                resetSpeechUI();
+            };
+
+            utterance.onerror = () => {
+                isSpeakingNow = false;
+                stopMegaphoneCarrierNoise();
+                resetSpeechUI();
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function stopSpeech() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            isSpeakingNow = false;
+            stopMegaphoneCarrierNoise();
+            resetSpeechUI();
+        }
+
+        function resetSpeechUI() {
+            const tvInd = document.getElementById('tv-tts-indicator');
+            if (tvInd) {
+                tvInd.classList.add('hidden');
+                tvInd.classList.remove('flex');
+            }
+            const pill = document.getElementById('tts-status-pill');
+            if (pill) {
+                pill.innerHTML = `<i class="fa-solid fa-microphone-lines"></i> <span>Syntezator: Gotowy (pl-PL)</span>`;
+            }
+        }
+
+        // --- 6. VOIVODESHIPS & SIM POPULATION LOGIC ---
+        function getTotalSelectedSims() {
+            let sum = 0;
+            selectedVoivodeships.forEach(id => {
+                const v = VOIVODESHIPS.find(item => item.id === id);
+                if (v) sum += v.sims;
+            });
+            return Math.round(sum * 10) / 10;
+        }
+
+        function renderVoivodeshipControls() {
+            const container = document.getElementById('voivodeship-buttons-grid');
+            container.innerHTML = '';
+
+            VOIVODESHIPS.forEach(v => {
+                const isSelected = selectedVoivodeships.has(v.id);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.onclick = () => toggleVoivodeship(v.id);
+                btn.className = `px-2.5 py-1.5 rounded-lg text-left text-xs font-mono flex items-center justify-between border transition ${
+                    isSelected
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-200 font-bold'
+                        : 'bg-slate-900/90 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                }`;
+                btn.innerHTML = `
+                    <span class="truncate">${v.name}</span>
+                    <span class="text-[10px] opacity-75 ml-1 shrink-0">${v.sims}M</span>
+                `;
+                container.appendChild(btn);
+            });
+
+            const totalSims = getTotalSelectedSims();
+            document.getElementById('selected-count-badge').textContent = `Wybrano: ${selectedVoivodeships.size}/16`;
+            document.getElementById('sim-cards-counter').textContent = `Karty SIM: ~${totalSims} mln`;
+            document.getElementById('bts-target-sims').textContent = `~${totalSims} mln kart SIM`;
+        }
+
+        function toggleVoivodeship(id) {
+            if (selectedVoivodeships.has(id)) {
+                if (selectedVoivodeships.size > 1) {
+                    selectedVoivodeships.delete(id);
+                }
+            } else {
+                selectedVoivodeships.add(id);
+            }
+            renderVoivodeshipControls();
+            syncMapStyles();
+            applyHazardTemplate();
+        }
+
+        function selectAllVoivodeships() {
+            VOIVODESHIPS.forEach(v => selectedVoivodeships.add(v.id));
+            renderVoivodeshipControls();
+            syncMapStyles();
+            applyHazardTemplate();
+        }
+
+        function selectRegionPreset(preset) {
+            selectedVoivodeships.clear();
+            if (preset === 'coast') {
+                ['zachodniopomorskie', 'pomorskie', 'warminsko-mazurskie'].forEach(id => selectedVoivodeships.add(id));
+            } else if (preset === 'south') {
+                ['dolnoslaskie', 'opolskie', 'slaskie', 'malopolskie', 'podkarpackie'].forEach(id => selectedVoivodeships.add(id));
+            }
+            renderVoivodeshipControls();
+            syncMapStyles();
+            applyHazardTemplate();
+        }
+
+        function clearVoivodeships() {
+            selectedVoivodeships.clear();
+            selectedVoivodeships.add('wielkopolskie');
+            renderVoivodeshipControls();
+            syncMapStyles();
+            applyHazardTemplate();
+        }
+
+        function syncMapStyles() {
+            VOIVODESHIPS.forEach(v => {
+                const poly = document.getElementById(`map-${v.id}`);
+                if (!poly) return;
+                poly.classList.remove('selected', 'active-alert');
+                if (selectedVoivodeships.has(v.id)) {
+                    poly.classList.add(isAlertActive ? 'active-alert' : 'selected');
+                }
+            });
+        }
+
+        function getFormattedRegionString() {
+            if (selectedVoivodeships.size === 16) {
+                return 'CAŁA POLSKA';
+            }
+            const names = Array.from(selectedVoivodeships).map(id => {
+                const found = VOIVODESHIPS.find(v => v.id === id);
+                return found ? found.name : id;
+            });
+            if (names.length <= 2) {
+                return `woj. ${names.join(', ')}`;
+            }
+            return `woj. ${names.slice(0, 2).join(', ')} (+${names.length - 2})`;
+        }
+
+        // --- 7. HAZARD SELECTION & MOBILE TECHNOLOGY MODES ---
+        function renderHazardButtons() {
+            const container = document.getElementById('hazard-types-grid');
+            container.innerHTML = '';
+
+            HAZARDS.forEach(h => {
+                const active = h.id === currentHazardId;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.onclick = () => selectHazard(h.id);
+                btn.className = `p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                    active
+                        ? 'bg-amber-500/15 border-amber-500 text-white shadow-md'
+                        : 'bg-slate-950/70 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`;
+                btn.innerHTML = `
+                    <div class="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center ${
+                        active ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-amber-400'
+                    }">
+                        <i class="fa-solid ${h.icon} text-sm"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="font-bold text-xs leading-tight">${h.name}</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5 leading-snug">${h.subtitle}</div>
+                    </div>
+                `;
+                container.appendChild(btn);
+            });
+        }
+
+        function selectHazard(hazardId) {
+            currentHazardId = hazardId;
+            const hazardObj = HAZARDS.find(h => h.id === hazardId);
+            if (hazardObj) {
+                document.getElementById('siren-mode-select').value = hazardObj.defaultSiren;
+            }
+            renderHazardButtons();
+            applyHazardTemplate();
+        }
+
+        function setMobileTech(mode) {
+            mobileTechMode = mode;
+            const btnSms = document.getElementById('tech-btn-sms');
+            const btnCb = document.getElementById('tech-btn-cb');
+            const btnDual = document.getElementById('tech-btn-dual');
+
+            const baseClass = 'p-3 rounded-xl border text-left transition flex flex-col justify-between bg-slate-950/70 border-slate-800 opacity-75 hover:opacity-100';
+            btnSms.className = baseClass;
+            btnCb.className = baseClass;
+            btnDual.className = baseClass;
+
+            if (mode === 'sms') {
+                btnSms.className = 'p-3 rounded-xl border-2 border-amber-500 bg-amber-500/10 text-left transition flex flex-col justify-between shadow-md';
+                switchPhoneScreenView('sms');
+            } else if (mode === 'cb') {
+                btnCb.className = 'p-3 rounded-xl border-2 border-red-500 bg-red-500/10 text-left transition flex flex-col justify-between shadow-md';
+                switchPhoneScreenView('cb');
+            } else {
+                btnDual.className = 'p-3 rounded-xl border-2 border-cyan-500 bg-cyan-500/10 text-left transition flex flex-col justify-between shadow-md';
+            }
+        }
+
+        function switchPhoneScreenView(view) {
+            phoneScreenView = view;
+            const smsScreen = document.getElementById('phone-screen-sms');
+            const cbScreen = document.getElementById('phone-screen-cb');
+            const tabSms = document.getElementById('tab-view-sms');
+            const tabCb = document.getElementById('tab-view-cb');
+            const caption = document.getElementById('phone-bottom-caption');
+
+            if (view === 'cb') {
+                smsScreen.classList.add('hidden');
+                cbScreen.classList.remove('hidden');
+                tabCb.className = 'py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold bg-red-600 text-white transition flex items-center justify-center gap-1.5 shadow';
+                tabSms.className = 'py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold bg-slate-800 text-slate-300 hover:text-white transition flex items-center justify-center gap-1.5';
+                caption.textContent = 'Cell Broadcast: Natychmiastowy (<1s), omija DND';
+            } else {
+                cbScreen.classList.add('hidden');
+                smsScreen.classList.remove('hidden');
+                tabSms.className = 'py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold bg-amber-500 text-slate-950 transition flex items-center justify-center gap-1.5 shadow';
+                tabCb.className = 'py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold bg-slate-800 text-slate-300 hover:text-white transition flex items-center justify-center gap-1.5';
+                caption.textContent = 'Standard SMS: Kolejkowany w BTS, respektuje DND';
+            }
+        }
+
+        function togglePhoneDnd() {
+            phoneDndActive = !phoneDndActive;
+            const btn = document.getElementById('phone-dnd-btn');
+            const icon = document.getElementById('phone-dnd-icon');
+            const label = document.getElementById('phone-dnd-label');
+            const pill = document.getElementById('phone-dnd-status-pill');
+            const smsSoundInfo = document.getElementById('phone-sms-sound-info');
+
+            if (phoneDndActive) {
+                btn.className = 'px-2.5 py-1 rounded-lg bg-purple-950/90 text-purple-200 border border-purple-500/60 text-[11px] font-mono font-bold flex items-center gap-1.5 transition';
+                icon.className = 'fa-solid fa-moon text-purple-400';
+                label.textContent = 'Tryb Cichy (DND)';
+                pill.classList.remove('hidden');
+                smsSoundInfo.textContent = 'Wyciszono (DND)';
+                smsSoundInfo.className = 'text-purple-400';
+            } else {
+                btn.className = 'px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 transition';
+                icon.className = 'fa-solid fa-bell text-emerald-400';
+                label.textContent = 'Dźwięk WŁ.';
+                pill.classList.add('hidden');
+                smsSoundInfo.textContent = 'Dźwięk SMS';
+                smsSoundInfo.className = 'text-amber-400';
+            }
+        }
+
+        function applyHazardTemplate() {
+            const hazard = HAZARDS.find(h => h.id === currentHazardId) || HAZARDS[0];
+            const regionStr = getFormattedRegionString();
+            document.getElementById('alert-message-input').value = hazard.templateSms(regionStr);
+            document.getElementById('voice-script-input').value = hazard.templateVoice(regionStr);
+            document.getElementById('target-region-summary').textContent = `Obszar docelowy: ${regionStr}`;
+            handleMessageEdit();
+        }
+
+        function resetTemplateText() {
+            applyHazardTemplate();
+        }
+
+        function stripPolishChars() {
+            const input = document.getElementById('alert-message-input');
+            const map = {
+                'ą':'a','ć':'c','ę':'e','ł':'l','ń':'n','ó':'o','ś':'s','ź':'z','ż':'z',
+                'Ą':'A','Ć':'C','Ę':'E','Ł':'L','Ń':'N','Ó':'O','Ś':'S','Ź':'Z','Ż':'Z'
+            };
+            input.value = input.value.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, match => map[match] || match);
+            handleMessageEdit();
+        }
+
+        function handleMessageEdit() {
+            const text = document.getElementById('alert-message-input').value;
+            const len = text.length;
+            const smsParts = Math.max(1, Math.ceil(len / 160));
+            const counterEl = document.getElementById('char-counter');
+            counterEl.textContent = `Znaków: ${len} / 160 (${smsParts} SMS)`;
+            counterEl.className = len > 160 ? 'text-amber-400 font-bold' : 'text-slate-400';
+
+            updateLivePreviews();
+        }
+
+        function updateChannelSelection() {
+            updateLivePreviews();
+        }
+
+        // --- 8. LIVE RECEIVER PREVIEWS (PHONE & TV) ---
+        function updateLivePreviews() {
+            const text = document.getElementById('alert-message-input').value.trim() || 'Brak treści komunikatu.';
+            const regionStr = getFormattedRegionString();
+            const hazard = HAZARDS.find(h => h.id === currentHazardId) || HAZARDS[0];
+
+            const rcbEnabled = document.getElementById('ch-rcb').checked;
+            const rsoEnabled = document.getElementById('ch-rso').checked;
+
+            // Phone SMS & CB Cards
+            document.getElementById('phone-rcb-card').style.opacity = rcbEnabled ? '1' : '0.35';
+            document.getElementById('phone-rcb-text').textContent = text;
+            document.getElementById('phone-cb-text').textContent = text;
+            document.getElementById('phone-rcb-region').textContent = regionStr;
+
+            // Phone RSO Card
+            document.getElementById('phone-rso-card').style.opacity = rsoEnabled ? '1' : '0.35';
+            document.getElementById('phone-rso-title').textContent = hazard.rsoCategory;
+
+            // TV RSO Ticker & Fullscreen Board
+            document.getElementById('tv-ticker-header').textContent = `RSO • ${hazard.rsoCategory}`;
+            document.getElementById('tv-ticker-region').textContent = regionStr;
+            document.getElementById('tv-ticker-text').textContent = `[SYMULATOR EDUKACYJNY] ${text} • Obszar: ${regionStr} • Zachowaj ostrożność i śledź komunikaty służb.`;
+
+            document.getElementById('tv-board-category').textContent = hazard.rsoCategory;
+            document.getElementById('tv-board-message').textContent = text;
+            document.getElementById('tv-board-region').textContent = `Obszar obowiązywania: ${regionStr}`;
+        }
+
+        function setTvDisplayMode(mode) {
+            tvDisplayMode = mode;
+            const board = document.getElementById('tv-fullscreen-board');
+            const btnTicker = document.getElementById('tv-mode-ticker-btn');
+            const btnFull = document.getElementById('tv-mode-full-btn');
+
+            if (mode === 'fullscreen') {
+                board.classList.remove('hidden');
+                btnFull.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500 text-slate-950 font-bold transition';
+                btnTicker.className = 'px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 hover:text-white transition';
+            } else {
+                board.classList.add('hidden');
+                btnTicker.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500 text-slate-950 font-bold transition';
+                btnFull.className = 'px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 hover:text-white transition';
+            }
+        }
+
+        // --- 9. BTS QUEUE SIMULATION (SMS vs CELL BROADCAST) ---
+        function startBtsSimulation() {
+            if (smsQueueInterval) clearInterval(smsQueueInterval);
+
+            const totalSims = getTotalSelectedSims();
+            const smsBar = document.getElementById('sms-queue-bar');
+            const smsStatus = document.getElementById('sms-queue-status');
+            const cbBar = document.getElementById('cb-queue-bar');
+            const cbStatus = document.getElementById('cb-queue-status');
+
+            // Cell Broadcast is instantaneous (<1 second)
+            if (mobileTechMode === 'cb' || mobileTechMode === 'dual') {
+                cbBar.style.width = '100%';
+                cbStatus.textContent = `Dostarczono 100% (~${totalSims}M SIM w 0.8 s)`;
+                cbStatus.className = 'text-emerald-400 font-bold';
+            } else {
+                cbBar.style.width = '0%';
+                cbStatus.textContent = 'Nieaktywny w trybie SMS';
+                cbStatus.className = 'text-slate-500';
+            }
+
+            // SMS Queue depends on population size
+            if (mobileTechMode === 'sms' || mobileTechMode === 'dual') {
+                smsProgress = 4;
+                smsBar.style.width = '4%';
+                // Larger SIM count = slower queue step
+                const step = Math.max(1.2, 18 / Math.max(1.5, totalSims));
+                smsStatus.textContent = `Kolejkowanie BTS... 4% (szac. ~${Math.ceil(totalSims * 8)} min)`;
+                smsStatus.className = 'text-amber-400 font-bold';
+
+                smsQueueInterval = setInterval(() => {
+                    smsProgress = Math.min(100, smsProgress + step);
+                    smsBar.style.width = `${smsProgress}%`;
+                    if (smsProgress >= 100) {
+                        smsStatus.textContent = `Wysłano 100% (~${totalSims}M SMS)`;
+                        smsStatus.className = 'text-emerald-400 font-bold';
+                        clearInterval(smsQueueInterval);
+                    } else {
+                        smsStatus.textContent = `Kolejkowanie BTS: ${Math.round(smsProgress)}% (~${totalSims}M SIM)`;
+                    }
+                }, 250);
+            } else {
+                smsBar.style.width = '0%';
+                smsStatus.textContent = 'Pominięto (Tryb Cell Broadcast)';
+                smsStatus.className = 'text-slate-500';
+            }
+        }
+
+        // --- 10. DISPATCH / TRIGGER FULL ALERT & ALL CLEAR ---
+        function triggerFullAlert() {
+            isAlertActive = true;
+            syncMapStyles();
+            updateLivePreviews();
+
+            const rcbEnabled = document.getElementById('ch-rcb').checked;
+            const rsoEnabled = document.getElementById('ch-rso').checked;
+            const sirenEnabled = document.getElementById('ch-siren').checked;
+            const chosenSirenMode = document.getElementById('siren-mode-select').value;
+            const autoTts = document.getElementById('auto-tts-tv').checked;
+
+            // Update Global Status Banner
+            const dot = document.getElementById('global-status-dot');
+            const statusText = document.getElementById('global-status-text');
+            dot.className = 'w-3 h-3 rounded-full bg-red-500 animate-ping';
+            statusText.className = 'text-xs font-mono font-bold text-red-400 mt-0.5';
+            statusText.textContent = 'AKTYWNY ALARM KRYZYSOWY (SYMULACJA)';
+
+            // 1. Mobile Channel (SMS vs Cell Broadcast)
+            if (rcbEnabled) {
+                startBtsSimulation();
+                const phone = document.getElementById('virtual-phone');
+                phone.classList.add('animate-phone-vibrate');
+                setTimeout(() => phone.classList.remove('animate-phone-vibrate'), 1800);
+
+                const nowShort = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('phone-rcb-time').textContent = `Teraz (${nowShort})`;
+
+                if (mobileTechMode === 'cb' || mobileTechMode === 'dual') {
+                    switchPhoneScreenView('cb');
+                    // Cell Broadcast ALWAYS plays dual-tone 853+960Hz even if DND is active
+                    if (!sirenEnabled) {
+                        playCellBroadcastTone();
+                    }
+                } else {
+                    switchPhoneScreenView('sms');
+                    // Standard SMS respects DND
+                    if (!phoneDndActive && !sirenEnabled) {
+                        playSmsNotificationBeep();
+                    }
+                }
+            }
+
+            // 2. Siren / Megaphone DSP-50 Channel
+            if (sirenEnabled) {
+                if (chosenSirenMode === 'megaphone') {
+                    triggerMegaphoneSiren();
+                } else {
+                    startSiren(chosenSirenMode);
+                    if (autoTts && rsoEnabled) {
+                        speakAnnouncement('tv');
+                    }
+                }
+            } else if (autoTts && rsoEnabled) {
+                speakAnnouncement('tv');
+            }
+        }
+
+        function triggerAllClear() {
+            selectHazard('allclear');
+            isAlertActive = false;
+            syncMapStyles();
+
+            const dot = document.getElementById('global-status-dot');
+            const statusText = document.getElementById('global-status-text');
+            dot.className = 'w-3 h-3 rounded-full bg-emerald-400';
+            statusText.className = 'text-xs font-mono font-bold text-emerald-400 mt-0.5';
+            statusText.textContent = 'ODWOŁANIE ALARMU (DŹWIĘK CIĄGŁY)';
+
+            if (document.getElementById('ch-siren').checked) {
+                startSiren('continuous');
+            }
+            if (document.getElementById('auto-tts-tv').checked) {
+                speakAnnouncement('tv');
+            }
+        }
+
+        function stopAllSystems() {
+            isAlertActive = false;
+            syncMapStyles();
+            stopSiren();
+            stopSpeech();
+            stopCbTone();
+            if (smsQueueInterval) clearInterval(smsQueueInterval);
+
+            const dot = document.getElementById('global-status-dot');
+            const statusText = document.getElementById('global-status-text');
+            dot.className = 'w-3 h-3 rounded-full bg-emerald-500';
+            statusText.className = 'text-xs font-mono font-bold text-emerald-400 mt-0.5';
+            statusText.textContent = 'GOTOWOŚĆ OPERACYJNA';
+        }
+
+        // --- 11. WEB AUDIO API: SIREN, DSP-50 CHIME, AND CELL BROADCAST DUAL-TONE ---
+        function ensureAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Standard SMS beep (respects DND)
+        function playSmsNotificationBeep() {
+            try {
+                ensureAudioContext();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.setValueAtTime(1174.6, now + 0.14);
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } catch (e) {}
+        }
+
+        // Authentic Cell Broadcast / EU-Alert Dual-Tone (853 Hz + 960 Hz) bypassing DND
+        function playCellBroadcastTone() {
+            try {
+                ensureAudioContext();
+                stopCbTone();
+
+                let bursts = 0;
+                const triggerBurst = () => {
+                    if (bursts >= 3) {
+                        stopCbTone();
+                        return;
+                    }
+                    bursts++;
+                    const now = audioCtx.currentTime;
+                    cbToneOsc1 = audioCtx.createOscillator();
+                    cbToneOsc2 = audioCtx.createOscillator();
+                    cbToneGain = audioCtx.createGain();
+
+                    cbToneOsc1.type = 'square';
+                    cbToneOsc2.type = 'square';
+                    cbToneOsc1.frequency.setValueAtTime(853, now);
+                    cbToneOsc2.frequency.setValueAtTime(960, now);
+
+                    cbToneGain.gain.setValueAtTime(sirenVolume * 0.22, now);
+                    cbToneGain.gain.setValueAtTime(0.0001, now + 0.65);
+
+                    cbToneOsc1.connect(cbToneGain);
+                    cbToneOsc2.connect(cbToneGain);
+                    cbToneGain.connect(audioCtx.destination);
+
+                    cbToneOsc1.start(now);
+                    cbToneOsc2.start(now);
+                    cbToneOsc1.stop(now + 0.66);
+                    cbToneOsc2.stop(now + 0.66);
+                };
+
+                triggerBurst();
+                cbToneInterval = setInterval(triggerBurst, 950);
+            } catch (e) {}
+        }
+
+        function stopCbTone() {
+            if (cbToneInterval) {
+                clearInterval(cbToneInterval);
+                cbToneInterval = null;
+            }
+            try {
+                if (cbToneOsc1) cbToneOsc1.stop();
+                if (cbToneOsc2) cbToneOsc2.stop();
+            } catch (e) {}
+            cbToneOsc1 = null;
+            cbToneOsc2 = null;
+        }
+
+        function acknowledgeCellBroadcast() {
+            stopCbTone();
+            switchPhoneScreenView('sms');
+        }
+
+        // DSP-50 Electronic Siren 3-Tone Warning Gong + Megaphone Speech
+        function triggerMegaphoneSiren() {
+            try {
+                ensureAudioContext();
+                stopSiren();
+                stopSpeech();
+
+                currentSirenMode = 'megaphone';
+                sirenActive = true;
+                sirenStartTime = performance.now();
+                updateSirenStatusUI('megaphone', true);
+
+                // Play 3-tone outdoor PA chime (C5 -> E5 -> G5 with horn bandpass)
+                const notes = [523.25, 659.25, 783.99];
+                const now = audioCtx.currentTime;
+
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    const filter = audioCtx.createBiquadFilter();
+
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.42);
+
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 950;
+                    filter.Q.value = 1.8;
+
+                    gain.gain.setValueAtTime(sirenVolume * 0.35, now + idx * 0.42);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + (idx + 1) * 0.42);
+
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start(now + idx * 0.42);
+                    osc.stop(now + (idx + 1) * 0.42);
+                });
+
+                // After the 3-tone chime (1.35s), launch the Polish Megaphone Voice
+                setTimeout(() => {
+                    if (sirenActive && currentSirenMode === 'megaphone') {
+                        speakAnnouncement('megaphone');
+                    }
+                }, 1350);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // Subtle outdoor PA horn carrier noise while Megaphone TTS is speaking
+        function startMegaphoneCarrierNoise() {
+            try {
+                ensureAudioContext();
+                stopMegaphoneCarrierNoise();
+
+                const bufferSize = audioCtx.sampleRate * 2;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                noiseNode = audioCtx.createBufferSource();
+                noiseNode.buffer = buffer;
+                noiseNode.loop = true;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 1100;
+                filter.Q.value = 2.5;
+
+                const noiseGain = audioCtx.createGain();
+                noiseGain.gain.value = sirenVolume * 0.035;
+
+                noiseNode.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(audioCtx.destination);
+                noiseNode.start();
+            } catch (e) {}
+        }
+
+        function stopMegaphoneCarrierNoise() {
+            if (noiseNode) {
+                try {
+                    noiseNode.stop();
+                    noiseNode.disconnect();
+                } catch (e) {}
+                noiseNode = null;
+            }
+        }
+
+        function startSiren(mode) {
+            try {
+                ensureAudioContext();
+                stopSiren();
+
+                currentSirenMode = mode;
+                sirenActive = true;
+                sirenStartTime = performance.now();
+
+                oscillator = audioCtx.createOscillator();
+                gainNode = audioCtx.createGain();
+
+                oscillator.type = 'sawtooth';
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 1150;
+
+                gainNode.gain.value = sirenVolume * 0.4;
+
+                oscillator.connect(filter);
+                filter.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscillator.start();
+
+                updateSirenStatusUI(mode, true);
+            } catch (err) {
+                console.error('Błąd uruchomienia Web Audio API:', err);
+            }
+        }
+
+        function stopSiren() {
+            sirenActive = false;
+            currentFreq = 0;
+            stopMegaphoneCarrierNoise();
+            if (oscillator) {
+                try {
+                    oscillator.stop();
+                    oscillator.disconnect();
+                } catch (e) {}
+                oscillator = null;
+            }
+            if (gainNode) {
+                try {
+                    gainNode.disconnect();
+                } catch (e) {}
+                gainNode = null;
+            }
+            updateSirenStatusUI(currentSirenMode, false);
+        }
+
+        function updateSirenVolume(val) {
+            sirenVolume = Number(val) / 100;
+            document.getElementById('siren-volume-label').textContent = `${val}%`;
+            if (gainNode && audioCtx) {
+                gainNode.gain.setTargetAtTime(sirenVolume * 0.4, audioCtx.currentTime, 0.05);
+            }
+        }
+
+        function updateSirenStatusUI(mode, active) {
+            const badge = document.getElementById('siren-live-badge');
+            const title = document.getElementById('siren-meaning-title');
+            const desc = document.getElementById('siren-meaning-desc');
+
+            if (!active) {
+                badge.textContent = 'WYŁĄCZONA (0 Hz)';
+                badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+                document.getElementById('siren-freq-readout').textContent = 'Częstotliwość: 0 Hz';
+                document.getElementById('siren-timer-readout').textContent = 'Czas: 00:00 / 03:00';
+                return;
+            }
+
+            if (mode === 'modulated') {
+                badge.textContent = 'OGŁOSZENIE ALARMU (MODULOWANY)';
+                badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-bold animate-pulse';
+                title.textContent = 'Aktywny sygnał: OGŁOSZENIE ALARMU (Dźwięk modulowany - 3 min)';
+                desc.innerHTML = 'Syrena emituje <strong>dźwięk modulowany</strong> (190 Hz – 430 Hz). Zgodnie z rozporządzeniem RM oznacza to bezpośrednie <strong>ogłoszenie alarmu</strong>.';
+            } else if (mode === 'continuous') {
+                badge.textContent = 'ODWOŁANIE ALARMU (CIĄGŁY)';
+                badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
+                title.textContent = 'Aktywny sygnał: ODWOŁANIE ALARMU (Dźwięk ciągły - 3 min)';
+                desc.innerHTML = 'Syrena emituje <strong>jednostajny dźwięk ciągły</strong> (~420 Hz) przez 3 minuty. Oznacza to <strong>odwołanie alarmu</strong> i koniec zagrożenia.';
+            } else if (mode === 'megaphone') {
+                badge.textContent = 'MEGAFON DSP-50 (KOMUNIKAT GŁOSOWY)';
+                badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold animate-pulse';
+                title.textContent = 'Aktywny sygnał: MEGAFON SYRENY ELEKTRONICZNEJ DSP-50';
+                desc.innerHTML = 'Po 3-tonowym gongu ostrzegawczym syrena szczelinowa nadaje <strong>komunikat głosowy na żywo</strong> z Centrum Zarządzania Kryzysowego.';
+            }
+        }
+
+        // --- 12. REAL-TIME CANVAS OSCILLOSCOPE (SIREN WAVE + MEGAPHONE SPEECH WAVE) ---
+        let canvas, ctx;
+        let phase = 0;
+
+        function initCanvasVisualizer() {
+            canvas = document.getElementById('siren-canvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+        }
+
+        function resizeCanvas() {
+            if (!canvas) return;
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
+        function animateVisualizerLoop() {
+            requestAnimationFrame(animateVisualizerLoop);
+            if (!canvas || !ctx) return;
+
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, h / 2);
+            ctx.lineTo(w, h / 2);
+            ctx.stroke();
+
+            if (sirenActive && currentSirenMode === 'megaphone') {
+                // Draw dynamic speech formant waveform for DSP-50 Megaphone
+                const elapsedSec = (performance.now() - sirenStartTime) / 1000;
+                const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+                const secs = String(Math.floor(elapsedSec % 60)).padStart(2, '0');
+                document.getElementById('siren-freq-readout').textContent = isSpeakingNow ? 'Pasmo mowy: 300–3400 Hz (DSP-50)' : 'Gong ostrzegawczy: 523–784 Hz';
+                document.getElementById('siren-timer-readout').textContent = `Czas: ${mins}:${secs}`;
+
+                ctx.beginPath();
+                ctx.lineWidth = 2.2;
+                ctx.strokeStyle = '#f59e0b';
+                phase += 0.18;
+
+                for (let x = 0; x < w; x++) {
+                    const mod = Math.sin(x * 0.04 + phase) * Math.cos(x * 0.11 - phase * 1.7);
+                    const amp = (h * 0.30) * Math.max(0.2, sirenVolume);
+                    const y = h / 2 + mod * amp;
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            } else if (sirenActive && oscillator && audioCtx) {
+                const elapsedSec = (performance.now() - sirenStartTime) / 1000;
+
+                if (elapsedSec >= 180) {
+                    stopSiren();
+                    return;
+                }
+
+                if (currentSirenMode === 'modulated') {
+                    const lfo = (Math.sin((elapsedSec * 2 * Math.PI) / 6.5 - Math.PI / 2) + 1) / 2;
+                    currentFreq = 190 + lfo * 240;
+                } else {
+                    const spinUp = Math.min(1, elapsedSec / 1.5);
+                    currentFreq = 180 + spinUp * 240;
+                }
+
+                oscillator.frequency.setTargetAtTime(currentFreq, audioCtx.currentTime, 0.03);
+
+                document.getElementById('siren-freq-readout').textContent = `Częstotliwość: ${Math.round(currentFreq)} Hz`;
+                const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+                const secs = String(Math.floor(elapsedSec % 60)).padStart(2, '0');
+                document.getElementById('siren-timer-readout').textContent = `Czas: ${mins}:${secs} / 03:00`;
+
+                ctx.beginPath();
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = currentSirenMode === 'modulated' ? '#ef4444' : '#10b981';
+
+                const waveDensity = currentFreq / 9500;
+                const amplitude = (h * 0.34) * Math.max(0.15, sirenVolume);
+                phase += currentFreq * 0.0008;
+
+                for (let x = 0; x < w; x++) {
+                    const y = h / 2 + Math.sin(x * waveDensity + phase) * amplitude;
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            } else {
+                // Idle flat line with subtle pulse
+                ctx.beginPath();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = '#334155';
+                ctx.moveTo(0, h / 2);
+                ctx.lineTo(w, h / 2);
+                ctx.stroke();
+            }
+        }
+    </script>
+</body>
+</html>
+```
